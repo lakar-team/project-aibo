@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project AIBO: Lakar</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #202020; color: white; font-family: sans-serif; }
+        #canvas-container { width: 100vw; height: 100vh; display: block; }
+        #ui-layer { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); text-align: center; width: 80%; z-index: 10; }
+        button { padding: 15px 30px; font-size: 18px; border-radius: 30px; border: none; cursor: pointer; background: #4CAF50; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.1s; }
+        button:active { transform: translateX(-50%) scale(0.95); }
+        button.listening { background: #ff4444; animation: pulse 1.5s infinite; }
+        #status { margin-bottom: 10px; font-size: 14px; color: #aaa; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+    
+    <div id="ui-layer">
+        <div id="status">Ready. Click to talk.</div>
+        <button id="talk-btn">🎙️ Speak to Lakar</button>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "@pixiv/three-vrm": "https://unpkg.com/@pixiv/three-vrm@3.0.0/lib/three-vrm.module.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+
+        // --- 1. SETUP 3D SCENE ---
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
+        camera.position.set(0.0, 1.4, 1.5); // Look at head level
+
+        const light = new THREE.DirectionalLight(0xffffff, 1.0);
+        light.position.set(1.0, 1.0, 1.0).normalize();
+        scene.add(light);
+
+        // --- 2. LOAD AVATAR ---
+        let currentVrm = undefined;
+        const loader = new GLTFLoader();
+        loader.register((parser) => {
+            return new VRMLoaderPlugin(parser);
+        });
+
+        // LOAD THE MODEL (Make sure you upload a file named 'avatar.vrm' later!)
+        loader.load(
+            './avatar.vrm', 
+            (gltf) => {
+                const vrm = gltf.userData.vrm;
+                VRMUtils.removeUnnecessaryVertices(gltf.scene);
+                VRMUtils.combineSkeletons(gltf.scene);
+                vrm.scene.rotation.y = Math.PI; // Rotate to face camera
+                scene.add(vrm.scene);
+                currentVrm = vrm;
+                console.log("Lakar is online.");
+                document.getElementById('status').innerText = "Lakar is awake.";
+            },
+            (progress) => console.log('Loading... ' + (100.0 * progress.loaded / progress.total).toFixed(2) + '%'),
+            (error) => {
+                console.error(error);
+                document.getElementById('status').innerText = "Error: Upload 'avatar.vrm' to GitHub!";
+            }
+        );
+
+        // Animation Loop
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            if (currentVrm) {
+                currentVrm.update(clock.getDelta());
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // --- 3. SPEECH & BRAIN LOGIC ---
+        const btn = document.getElementById('talk-btn');
+        const status = document.getElementById('status');
+        
+        // Simple Speech Recognition (Browser Native)
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("Your browser does not support Speech Recognition. Try Chrome.");
+        }
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-US'; // Or 'ja-JP' for Japanese
+
+        btn.addEventListener('click', () => {
+            recognition.start();
+            btn.classList.add('listening');
+            status.innerText = "Listening...";
+        });
+
+        recognition.onresult = async (event) => {
+            const text = event.results[0][0].transcript;
+            btn.classList.remove('listening');
+            status.innerText = "Thinking: " + text;
+
+            // SEND TO BRAIN (Vercel API)
+            try {
+                const response = await fetch('/api/brain', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text })
+                });
+                
+                const data = await response.json();
+                
+                if (data.reply) {
+                    status.innerText = "Lakar: " + data.reply;
+                    speak(data.reply);
+                } else {
+                    status.innerText = "Error: " + (data.error || "Unknown");
+                }
+            } catch (err) {
+                status.innerText = "Connection Error: " + err.message;
+            }
+        };
+
+        // Text to Speech
+        function speak(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            // Select a voice (Optional)
+            const voices = window.speechSynthesis.getVoices();
+            // Try to find a male English voice
+            const maleVoice = voices.find(v => v.name.includes('Male') || v.name.includes('Google US English'));
+            if (maleVoice) utterance.voice = maleVoice;
+            window.speechSynthesis.speak(utterance);
+            
+            // Simple Lip Sync Mockup
+            if(currentVrm) {
+                // In a full version, we analyze audio frequency here to move the mouth
+                // For now, let's just create a simple mouth open shape briefly
+                currentVrm.expressionManager.setValue('aa', 0.5);
+                setTimeout(() => currentVrm.expressionManager.setValue('aa', 0), 2000);
+            }
+        }
+    </script>
+</body>
+</html>
