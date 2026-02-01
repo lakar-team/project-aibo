@@ -43,12 +43,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded, isEmb
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(30, containerRef.current.clientWidth / containerRef.current.clientHeight, 0.1, 20.0);
         // Initial camera position
-        // isEmbedded: zoom out slightly to show shoulders/hat (z=1.3, y=1.4)
-        // Main: zoom out to show full head/hat (z=1.65)
+        // isEmbedded: zoom out more (z=1.4) and aim higher to lower avatar (y=1.5)
+        // Main: zoom out more (z=1.75) and aim higher (y=1.5)
         if (isEmbedded) {
-            camera.position.set(0.0, 1.4, 1.3);
+            camera.position.set(0.0, 1.5, 1.4);
         } else {
-            camera.position.set(0.0, 1.4, 1.65);
+            camera.position.set(0.0, 1.5, 1.75);
         }
 
         const light = new THREE.DirectionalLight(0xffffff, 1.0);
