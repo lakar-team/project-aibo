@@ -240,35 +240,36 @@ function HomeContent() {
       <div className="absolute bottom-[-10%] right-[-10%] h-[500px] w-[500px] rounded-full bg-[#7000ff]/10 blur-[120px]" />
 
       {/* Navigation */}
-      <nav className="fixed top-0 z-50 flex w-full items-center justify-between px-8 py-4 backdrop-blur-md">
+      <nav className={`fixed top-0 z-50 flex w-full items-center justify-between px-8 py-4 backdrop-blur-md ${isEmbedded ? 'hidden' : ''}`}>
         <div className="text-xl font-bold tracking-tighter text-white">
           PROJECT <span className="text-[#00f2ff]">AIBO</span>
         </div>
         <div className="text-xs text-zinc-500">{status}</div>
       </nav>
 
-      <main className="relative z-10 flex h-screen flex-col lg:flex-row">
+      <main className="relative z-10 flex h-screen flex-col lg:flex-row overflow-hidden">
         {/* Left: 3D Avatar */}
-        <div className="relative flex h-[40vh] w-full items-center justify-center lg:h-full lg:w-1/2">
+        <div className={`${isEmbedded ? 'absolute inset-0 z-0 h-full w-full' : 'relative flex h-[40vh] w-full items-center justify-center lg:h-full lg:w-1/2'}`}>
           <div className="relative h-full w-full">
             <VrmViewer ref={vrmViewerRef} isEmbedded={isEmbedded} onLoaded={(vrm) => { vrmRef.current = vrm; }} />
-            <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-[#050505] via-transparent to-transparent" />
+            <div className={`absolute inset-0 pointer-events-none ${isEmbedded ? 'bg-gradient-to-b from-black/30 via-transparent to-black/60' : 'bg-gradient-to-t from-[#050505] via-transparent to-transparent'}`} />
           </div>
 
           {/* Voice Button Overlay */}
           <button
             onClick={startListening}
-            className={`absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex h-16 w-16 items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 ${isListening ? 'bg-red-500 animate-pulse' : 'bg-[#00f2ff] shadow-[0_0_30px_rgba(0,242,255,0.4)]'}`}
+            className={`absolute left-1/2 -translate-x-1/2 z-20 flex h-16 w-16 items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 ${isListening ? 'bg-red-500 animate-pulse' : 'bg-[#00f2ff] shadow-[0_0_30px_rgba(0,242,255,0.4)]'
+              } ${isEmbedded ? 'bottom-24' : 'bottom-8'}`}
           >
             <span className="text-2xl">{isListening ? '🔴' : '🎙️'}</span>
           </button>
         </div>
 
         {/* Right: Chat Interface */}
-        <div className="flex h-[60vh] w-full flex-col lg:h-full lg:w-1/2">
+        <div className={`${isEmbedded ? 'absolute bottom-0 z-10 w-full h-[45%] flex flex-col bg-gradient-to-t from-black via-black/90 to-transparent pointer-events-none' : 'flex h-[60vh] w-full flex-col lg:h-full lg:w-1/2'}`}>
           {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto p-6 pt-20">
-            {messages.length === 0 && (
+          <div className={`flex-1 overflow-y-auto p-6 ${isEmbedded ? 'pt-4 pointer-events-auto scrollbar-hide' : 'pt-20 custom-scrollbar'}`}>
+            {messages.length === 0 && !isEmbedded && (
               <div className="flex h-full items-center justify-center text-center text-zinc-600">
                 <div>
                   <p className="text-lg font-medium text-zinc-400">Talk or chat with Web Witch</p>
@@ -278,12 +279,12 @@ function HomeContent() {
             )}
             {messages.map((msg, i) => (
               <div key={i} className={`mb-4 flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${msg.role === 'user'
-                  ? 'bg-[#00f2ff]/20 text-white'
-                  : 'bg-white/5 text-zinc-300 border border-white/10'
+                <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${msg.role === 'user'
+                  ? 'bg-[#00f2ff]/20 text-white backdrop-blur-sm'
+                  : 'bg-black/40 text-zinc-200 border border-white/10 backdrop-blur-sm'
                   }`}>
                   {msg.role === 'assistant' && (
-                    <div className="mb-1 text-xs font-medium text-[#7000ff]">🔮 Web Witch</div>
+                    <div className="mb-0.5 text-[10px] font-bold text-[#00f2ff] uppercase tracking-wider">Web Witch</div>
                   )}
                   {msg.content}
                 </div>
@@ -291,7 +292,7 @@ function HomeContent() {
             ))}
             {isThinking && (
               <div className="mb-4 flex justify-start">
-                <div className="max-w-[80%] rounded-2xl bg-white/5 px-4 py-3 text-zinc-400 border border-white/10">
+                <div className="max-w-[80%] rounded-2xl bg-black/40 px-4 py-3 text-zinc-400 border border-white/10 backdrop-blur-sm">
                   <div className="flex gap-1">
                     <span className="animate-bounce">.</span>
                     <span className="animate-bounce" style={{ animationDelay: '0.1s' }}>.</span>
@@ -304,7 +305,7 @@ function HomeContent() {
           </div>
 
           {/* Text Input */}
-          <div className="border-t border-white/10 p-4">
+          <div className={`border-t border-white/10 p-4 ${isEmbedded ? 'pointer-events-auto bg-black/80 backdrop-blur-md' : ''}`}>
             <div className="flex gap-3">
               <input
                 type="text"
