@@ -32,9 +32,15 @@ DEEP DIVE KNOWLEDGE (Use when asked "how" or for details):
 SIDE PROJECTS:
 - Power Lunch: Professional meetup platform (power-lunch.pages.dev)
 - Kanji Sniper: Japanese learning game
-- Momotaro Kids Book: Bilingual children's book on Amazon
+- Momotaro & The Kite Maker: Bilingual children's books
 - Nature Vibe YouTube: Relaxing nature channel
 - Redbubble Shop: Custom merch
+
+PERSONAL & TRIVIA:
+- Awards: PAM Award 2017 (Architecture), IID 2006 Silver Award
+- Teaching: Former Music Teacher
+- Interests: Japanese Owarai (Comedy), Digital Art
+- Business: Verified construction & business management record (Visa/Gov approved)
 
 PORTFOLIO: solar-punk-five.vercel.app (3D interactive site)
 

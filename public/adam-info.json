@@ -16,7 +16,9 @@
         "Process Automation",
         "BIM (Building Information Modeling)",
         "Sustainable HVAC",
-        "Technical Documentation"
+        "Technical Documentation",
+        "Music Education",
+        "Digital Art & Illustration"
     ],
     "deep_knowledge": {
         "kanji_sniper": {
@@ -46,7 +48,22 @@
         "lakar_design": {
             "growth": "100% YoY revenue growth for 8 consecutive years",
             "scale": "Scaled to 40+ concurrent capital projects",
-            "strategy": "Disrupted market by standardizing 'affordable designer renovations' using UX strategy in physical spaces"
+            "strategy": "Disrupted market by standardizing 'affordable designer renovations' using UX strategy in physical spaces",
+            "proven_track_record": "Extensive construction and business management records (Visa/Gov verified)"
+        },
+        "creative_arts": {
+            "books": [
+                "Momotaro Kids Book",
+                "The Kite Maker (2021 WAU)"
+            ],
+            "awards": [
+                "IID 2006 Silver Award",
+                "PAM Award 2017"
+            ],
+            "other_interests": [
+                "Owarai (Japanese Comedy)",
+                "Music Teaching"
+            ]
         }
     },
     "experience": [
@@ -80,7 +97,8 @@
             "highlights": [
                 "Scaled from zero to 40+ concurrent capital projects",
                 "Achieved 100% YoY revenue growth for 8 consecutive years",
-                "Pioneered 'affordable designer renovations' and early IoT-integrated living environments"
+                "Pioneered 'affordable designer renovations' and early IoT-integrated living environments",
+                "Managed extensive commercial and residential construction projects"
             ]
         },
         {
@@ -90,6 +108,15 @@
             "highlights": [
                 "Won PAM Award 2017 for Denai Alam Phase J15",
                 "Led architectural design and project delivery in Shah Alam"
+            ]
+        },
+        {
+            "company": "Music Education",
+            "role": "Music Teacher",
+            "duration": "Past Experience",
+            "highlights": [
+                "Teaching Curriculum Vitae on file",
+                "Passionate about music theory and performance"
             ]
         }
     ],
@@ -148,6 +175,11 @@
                 "link": "https://www.amazon.com/dp/B0GCV34Z4S"
             },
             {
+                "name": "The Kite Maker",
+                "description": "Illustrated book project (2021 WAU)",
+                "link": "#"
+            },
+            {
                 "name": "Nature Vibe YouTube",
                 "description": "YouTube channel with serene nature vibes and ambiance",
                 "link": "https://www.youtube.com/@naturevibechannel"
@@ -174,9 +206,10 @@
     },
     "fun_facts": [
         "Won the PAM Award 2017 for architecture in Malaysia",
+        "Received IID 2006 Silver Award",
         "Created Kanji Sniper - an OCR-based Japanese learning game",
-        "Wrote a bilingual Momotaro children's book",
-        "Runs a Nature Vibe YouTube channel",
-        "Built a personal Smart Home Lab with IoT experiments"
+        "Wrote 'The Kite Maker' and 'Momotaro' bilingual books",
+        "Has experience as a Music Teacher",
+        "Interested in Japanese Owarai (Comedy)"
     ]
 }
