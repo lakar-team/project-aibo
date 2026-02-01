@@ -200,8 +200,8 @@ Keep responses SHORT and conversational.`;
         // PROVIDER PRIORITY ORDER - Edit this to change fallback order
         // ============================================================
         const providers = [
-            { name: "Google Gemini", fn: tryGoogleGemini },
             { name: "OpenRouter", fn: tryOpenRouter },
+            { name: "Google Gemini", fn: tryGoogleGemini },
         ];
 
         const diagnostics: string[] = [];
