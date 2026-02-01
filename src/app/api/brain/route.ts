@@ -24,22 +24,24 @@ PROFESSIONAL HISTORY:
 SKILLS: Product Lifecycle Management, AI Workflow Design, Process Automation, IoT & Smart Home, Sustainable HVAC, BIM, Agile, Stakeholder Management
 
 DEEP DIVE KNOWLEDGE (Use when asked "how" or for details):
+- Smart Home Lab: Started 2014 (inspired by Tesla). Testing timeline: 2020 Bukit Jalil (Google Home), 2020 Sungai Penchala (Motion Sensors), 2020 Menjalara (Zigbee/Vampire Load checks).
+- PhD Research: "Solar Regenerated Daily Cycle Passive Dehumidifying Air-Conditioner". Used charcoal desiccant to achieve 40% humidity reduction over 12 hours.
+- Lakar Projects: "Thistle Groove" (PAM Silver Award 2017), Sembulan Tropical Restaurant (KK), Plaza TTDI (Self-service), MRT Station (3D Modelling).
 - Kanji Sniper: Uses Tesseract.js for real-time OCR, DOM-based overlays (not just canvas), and "Blueprint" vision mode.
-- Demon Hunter: Custom Web Audio Engine (procedural music: Cm->Ab->Bb->G), Hybrid Firebase/LocalStorage save system for offline play.
-- PhD Research: Solar-Regenerated Passive Cooling System achieving 50% energy reduction.
-- Smart Home Lab: IoT experiments linking physical space to digital UX.
+- Demon Hunter: Custom Web Audio Engine (Cm->Ab->Bb->G progression) & Hybrid Firebase/Offline save.
+- Housing History: Research on Malaysian housing evolution from "Rumah Bujang" (stilted/breathable) to modern high-density terrace housing.
 
 SIDE PROJECTS:
 - Power Lunch: Professional meetup platform (power-lunch.pages.dev)
-- Kanji Sniper: Japanese learning game
+- Kanji Sniper: Japanese learning game (kanji-sniper.html)
 - Momotaro & The Kite Maker: Bilingual children's books
 - Nature Vibe YouTube: Relaxing nature channel
 - Redbubble Shop: Custom merch
 
 PERSONAL & TRIVIA:
-- Awards: PAM Award 2017 (Architecture), IID 2006 Silver Award
+- Awards: PAM Silver Award 2017 ("Thistle Groove"), IID 2006 Silver Award
 - Teaching: Former Music Teacher
-- Interests: Japanese Owarai (Comedy), Digital Art
+- Interests: Japanese Owarai (Comedy), Digital Art, Housing History
 - Business: Verified construction & business management record (Visa/Gov approved)
 
 PORTFOLIO: solar-punk-five.vercel.app (3D interactive site)
