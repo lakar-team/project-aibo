@@ -20,6 +20,81 @@
         "Music Education",
         "Digital Art & Illustration"
     ],
+    "portfolio_sitemap": {
+        "guide_instructions": "The portfolio is a 3D Solar System. Users navigate by clicking planets or using the 'Navigate' menu. The 'Sun' is the Core Profile (CV).",
+        "destinations": [
+            {
+                "name": "Sun (Core Profile)",
+                "type": "Profile",
+                "content": "Main CV, Bio, Skills, Downloadable PDF"
+            },
+            {
+                "name": "Refil Japan",
+                "type": "Planet",
+                "content": "Product & Innovation Consultant work, Automated Workflows"
+            },
+            {
+                "name": "Climate Tech R&D",
+                "type": "Planet",
+                "content": "PhD Research, Solar Regenerated Cooling, Kyoto Conference Paper"
+            },
+            {
+                "name": "S&A Architects",
+                "type": "Planet",
+                "content": "Architecture portfolio, PAM Award 2017 (Thistle Groove)"
+            },
+            {
+                "name": "Lakar Design",
+                "type": "Planet",
+                "content": "Founder journey, 40+ projects, Construction/Business history"
+            },
+            {
+                "name": "Smart Home Lab",
+                "type": "Planet",
+                "content": "IoT experiments (2014-2020), Zigbee setup, Video Tour"
+            },
+            {
+                "name": "Cultural Engagement",
+                "type": "Planet",
+                "content": "Malaysia-Japan exchange, JIA Symposium presentation"
+            },
+            {
+                "name": "Project Aibo",
+                "type": "Planet",
+                "content": "AI Robotic Companion (Web Witch herself!)"
+            },
+            {
+                "name": "Kanji Sniper",
+                "type": "Planet",
+                "content": "Playable Japanese learning game (OCR Tech)"
+            },
+            {
+                "name": "Demon Hunter",
+                "type": "Planet",
+                "content": "Playable Action Game (Web Audio Engine)"
+            },
+            {
+                "name": "Momotaro Kids Book",
+                "type": "Planet",
+                "content": "Bilingual book on Amazon"
+            },
+            {
+                "name": "Merchandising",
+                "type": "Planet",
+                "content": "Redbubble Shop link"
+            },
+            {
+                "name": "Nature Vibe YouTube",
+                "type": "Planet",
+                "content": "YouTube Channel link"
+            },
+            {
+                "name": "Power Lunch",
+                "type": "Planet",
+                "content": "Meetup Platform (Stripe/Supabase)"
+            }
+        ]
+    },
     "deep_knowledge": {
         "kanji_sniper": {
             "stack": "HTML5, CSS3, Vanilla JS, Tesseract.js (v5)",
@@ -51,7 +126,7 @@
         "lakar_design": {
             "growth": "100% YoY revenue growth for 8 consecutive years",
             "scale": "Scaled from garage to 40+ concurrent capital projects",
-            "strategy": "Disrupted market by standardizing 'affordable designer renovations' using UX strategy",
+            "strategy": "Disrupted market by standardizing 'affordable designer renovations' using UX strategy in physical spaces",
             "key_projects": [
                 "Thistle Groove, Denai Alam (PAM Silver Award 2017) - 'Pleasant residential estate with garden-like ambience'",
                 "Sembulan, Kota Kinabalu - Tropical theme restaurant conversion",
