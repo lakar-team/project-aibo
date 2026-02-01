@@ -42,11 +42,13 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded, isEmb
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(30, containerRef.current.clientWidth / containerRef.current.clientHeight, 0.1, 20.0);
-        // Embedded mode: focus on neck/face area; Standalone: full body
+        // Initial camera position
+        // isEmbedded: zoom out slightly to show shoulders/hat (z=1.3, y=1.4)
+        // Main: zoom out to show full head/hat (z=1.65)
         if (isEmbedded) {
-            camera.position.set(0.0, 1.55, 0.8); // Closer, aimed at neck
+            camera.position.set(0.0, 1.4, 1.3);
         } else {
-            camera.position.set(0.0, 1.4, 1.5); // Full body framing
+            camera.position.set(0.0, 1.4, 1.65);
         }
 
         const light = new THREE.DirectionalLight(0xffffff, 1.0);
