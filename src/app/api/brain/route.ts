@@ -22,32 +22,55 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "OPENROUTER_API_KEY is not configured" }, { status: 500 });
         }
 
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "HTTP-Referer": "https://project-aibo.vercel.app", // Optional
-                "X-Title": "Project AIBO", // Optional
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                "model": "google/gemini-2.0-flash-exp:free", // Improved free model reliability
-                "messages": messages,
-            })
-        });
+        // List of free models to try in order of preference
+        const FREE_MODELS = [
+            "google/gemma-2-9b-it:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "meta-llama/llama-3.1-8b-instruct:free",
+            "microsoft/phi-3-mini-128k-instruct:free"
+        ];
 
-        const data = await response.json();
+        let lastError = null;
 
-        if (data.error) {
-            console.error("OpenRouter API Error:", data.error);
-            return NextResponse.json({
-                error: `OpenRouter Error: ${data.error.message} (Code: ${data.error.code || 'unknown'})`
-            }, { status: 500 });
+        for (const model of FREE_MODELS) {
+            try {
+                console.log(`Attempting with model: ${model}`);
+                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${apiKey}`,
+                        "HTTP-Referer": "https://project-aibo.vercel.app",
+                        "X-Title": "Project AIBO",
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        "model": model,
+                        "messages": messages,
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    console.error(`Model ${model} failed:`, data.error);
+                    lastError = data.error;
+                    continue; // Try next model
+                }
+
+                if (data.choices && data.choices[0]) {
+                    const replyText = data.choices[0].message.content;
+                    return NextResponse.json({ reply: replyText, model_used: model });
+                }
+            } catch (err) {
+                console.error(`Network error with ${model}:`, err);
+                lastError = err;
+            }
         }
 
-        const replyText = data.choices[0].message.content;
-
-        return NextResponse.json({ reply: replyText });
+        // If all models failed
+        return NextResponse.json({
+            error: `All free models failed. Last error: ${lastError?.message || JSON.stringify(lastError)}`
+        }, { status: 500 });
 
     } catch (error: any) {
         console.error("Brain API Error:", error);
