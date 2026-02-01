@@ -14,50 +14,60 @@ interface ProviderResult {
     error?: string;
 }
 
-// Provider 1: Google Gemini (Direct API)
+// Provider 1: Google Gemini (Direct API) - with retry for cold starts
 async function tryGoogleGemini(messages: any[]): Promise<ProviderResult> {
     const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
     if (!apiKey) return { success: false, error: "GOOGLE_GEMINI_API_KEY not configured" };
 
-    try {
-        console.log("[Web Witch] Trying Google Gemini...");
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-            {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    contents: messages.map(m => ({
-                        role: m.role === "assistant" ? "model" : m.role === "system" ? "user" : m.role,
-                        parts: [{ text: m.content }]
-                    })),
-                    generationConfig: {
-                        maxOutputTokens: 500,
-                        temperature: 0.8
-                    }
-                })
+    const MAX_RETRIES = 2;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            console.log(`[Web Witch] Trying Google Gemini (attempt ${attempt}/${MAX_RETRIES})...`);
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: messages.map(m => ({
+                            role: m.role === "assistant" ? "model" : m.role === "system" ? "user" : m.role,
+                            parts: [{ text: m.content }]
+                        })),
+                        generationConfig: {
+                            maxOutputTokens: 500,
+                            temperature: 0.8
+                        }
+                    })
+                }
+            );
+
+            const data = await response.json();
+
+            if (data.error) {
+                throw new Error(data.error.message || "Gemini error");
             }
-        );
 
-        const data = await response.json();
+            if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+                return {
+                    success: true,
+                    reply: data.candidates[0].content.parts[0].text,
+                    model: "google/gemini-1.5-flash"
+                };
+            }
 
-        if (data.error) {
-            throw new Error(data.error.message || "Gemini error");
+            throw new Error("No content in Gemini response");
+        } catch (err: any) {
+            console.warn(`[Web Witch] Gemini attempt ${attempt} failed:`, err.message);
+            if (attempt < MAX_RETRIES) {
+                await new Promise(r => setTimeout(r, 500)); // Wait 500ms before retry
+            } else {
+                return { success: false, error: err.message };
+            }
         }
-
-        if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-            return {
-                success: true,
-                reply: data.candidates[0].content.parts[0].text,
-                model: "google/gemini-1.5-flash"
-            };
-        }
-
-        throw new Error("No content in Gemini response");
-    } catch (err: any) {
-        console.warn("[Web Witch] Gemini failed:", err.message);
-        return { success: false, error: err.message };
     }
+
+    return { success: false, error: "Gemini retries exhausted" };
 }
 
 // Provider 2: OpenRouter (with model rotation)
