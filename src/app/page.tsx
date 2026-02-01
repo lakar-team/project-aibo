@@ -17,6 +17,7 @@ interface Message {
 function HomeContent() {
   const searchParams = useSearchParams();
   const isEmbedded = searchParams.get('embed') === 'true';
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const [status, setStatus] = useState("Ready. Click to talk or type below.");
   const [isListening, setIsListening] = useState(false);
@@ -325,6 +326,38 @@ function HomeContent() {
           </div>
         </div>
       </main>
+
+      {/* Dev Preview Button - Only visible when NOT embedded */}
+      {!isEmbedded && (
+        <>
+          <button
+            onClick={() => setPreviewOpen(!previewOpen)}
+            className="fixed bottom-4 right-4 z-50 px-4 py-2 bg-zinc-800/80 border border-zinc-700 text-zinc-400 text-xs rounded hover:text-white transition-colors"
+          >
+            {previewOpen ? 'Close Preview' : 'Preview Embed'}
+          </button>
+
+          {previewOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+              <div className="relative border border-amber-500/30 rounded-lg overflow-hidden shadow-2xl bg-black">
+                <div className="absolute top-2 right-2 z-10">
+                  <button
+                    onClick={() => setPreviewOpen(false)}
+                    className="w-6 h-6 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-red-500/50"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <iframe
+                  src="/?embed=true"
+                  className="w-[400px] h-[650px] border-0"
+                  title="Embed Preview"
+                />
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
