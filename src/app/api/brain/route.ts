@@ -81,45 +81,63 @@ Keep responses SHORT and conversational.`;
             return NextResponse.json({ error: "OPENROUTER_API_KEY is not configured" }, { status: 500 });
         }
 
-        // Use the meta-model 'openrouter/free' which auto-selects currently available free models
-        const model = "openrouter/free";
+        // Claudish-style: Prioritized list of high-quality free models to cycle through
+        const FREE_MODELS = [
+            "google/gemini-2.0-flash-exp:free",           // Fastest & smartest free tier
+            "google/gemini-2.0-flash-thinking-exp:free",  // High reasoning capability
+            "deepseek/deepseek-r1-distill-llama-70b:free",// Strong logic
+            "meta-llama/llama-3.3-70b-instruct:free",     // Solid generalist
+            "qwen/qwen-2.5-coder-32b-instruct:free",      // Good for tech questions
+            "openrouter/free"                             // Ultimate fallback (auto-router)
+        ];
 
-        try {
-            console.log(`Attempting with model: ${model}`);
-            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${apiKey}`,
-                    "HTTP-Referer": "https://project-aibo.vercel.app",
-                    "X-Title": "Project AIBO",
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    "model": model,
-                    "messages": messages,
-                })
-            });
+        let lastError: any = null;
 
-            const data = await response.json();
+        for (const model of FREE_MODELS) {
+            try {
+                console.log(`[Web Witch] Attempting model: ${model}`);
+                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${apiKey}`,
+                        "HTTP-Referer": "https://project-aibo.vercel.app",
+                        "X-Title": "Project AIBO - Web Witch",
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        "model": model,
+                        "messages": messages,
+                    })
+                });
 
-            if (data.error) {
-                console.error(`Model ${model} failed:`, data.error);
-                return NextResponse.json({
-                    error: `OpenRouter Error: ${data.error.message} (Code: ${data.error.code || 'unknown'})`
-                }, { status: 500 });
+                const data = await response.json();
+
+                // If API returns an error (rate limit, overloaded), try next model
+                if (data.error) {
+                    console.warn(`[Web Witch] Model ${model} failed:`, data.error.message || data.error);
+                    throw new Error(data.error.message || "Model error");
+                }
+
+                if (data.choices && data.choices[0]) {
+                    const replyText = data.choices[0].message.content;
+                    console.log(`[Web Witch] Success with model: ${data.model || model}`);
+                    return NextResponse.json({ reply: replyText, model_used: data.model || model });
+                } else {
+                    throw new Error("No response content received");
+                }
+
+            } catch (err: any) {
+                console.warn(`[Web Witch] Failed with ${model}:`, err.message);
+                lastError = err;
+                // Continue to next model in the list...
             }
-
-            if (data.choices && data.choices[0]) {
-                const replyText = data.choices[0].message.content;
-                return NextResponse.json({ reply: replyText, model_used: data.model || model });
-            } else {
-                return NextResponse.json({ error: "No response content received" }, { status: 500 });
-            }
-
-        } catch (err: any) {
-            console.error(`Network error with ${model}:`, err);
-            return NextResponse.json({ error: `Network Error: ${err.message}` }, { status: 500 });
         }
+
+        // All models failed
+        console.error("[Web Witch] All models failed.");
+        return NextResponse.json({
+            error: `All free models failed. Last error: ${lastError?.message || 'Unknown'}`
+        }, { status: 503 });
 
     } catch (error: any) {
         console.error("Brain API Error:", error);
