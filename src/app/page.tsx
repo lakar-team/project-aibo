@@ -95,8 +95,21 @@ export default function Home() {
   const speak = (text: string) => {
     const utterance = new SpeechSynthesisUtterance(text);
     const voices = window.speechSynthesis.getVoices();
-    const femaleVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Google UK English Female') || v.name.includes('Samantha'));
-    if (femaleVoice) utterance.voice = femaleVoice;
+    // Prioritize specific high-quality female voices, then fallback to any female voice
+    const femaleVoice = voices.find(v =>
+      v.name.includes("Google UK English Female") ||
+      v.name.includes("Google US English") || // Often sounds better than default
+      v.name.includes("Samantha") ||
+      v.name.toLowerCase().includes("female")
+    );
+
+    if (femaleVoice) {
+      utterance.voice = femaleVoice;
+      // Slightly higher pitch for a more feminine tone if needed
+      utterance.pitch = 1.1;
+      utterance.rate = 1.0;
+    }
+
     window.speechSynthesis.speak(utterance);
 
     if (vrmRef.current) {
@@ -158,8 +171,8 @@ export default function Home() {
             {messages.map((msg, i) => (
               <div key={i} className={`mb-4 flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${msg.role === 'user'
-                    ? 'bg-[#00f2ff]/20 text-white'
-                    : 'bg-white/5 text-zinc-300 border border-white/10'
+                  ? 'bg-[#00f2ff]/20 text-white'
+                  : 'bg-white/5 text-zinc-300 border border-white/10'
                   }`}>
                   {msg.role === 'assistant' && (
                     <div className="mb-1 text-xs font-medium text-[#00f2ff]">Lakar</div>
