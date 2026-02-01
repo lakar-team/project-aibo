@@ -18,6 +18,37 @@
         "Sustainable HVAC",
         "Technical Documentation"
     ],
+    "deep_knowledge": {
+        "kanji_sniper": {
+            "stack": "HTML5, CSS3, Vanilla JS, Tesseract.js (v5)",
+            "features": [
+                "Real-time Optical Character Recognition (OCR) using Tesseract.js",
+                "Custom Computer Vision filters: High Contrast, Dark Mode, Blueprint Schematic",
+                "DOM-based targeting system (div overlays) instead of pure canvas for better accessibility",
+                "Combo system with dictionary integration (Jisho.org)"
+            ]
+        },
+        "demon_hunter": {
+            "stack": "Three.js, Web Audio API, Firebase Firestore (Hybrid Sync)",
+            "features": [
+                "Custom Audio Engine with procedural music generation (Cm -> Ab -> Bb -> G chord progression)",
+                "Hybrid save system: Falls back to LocalStorage if Firebase is unreachable (Offline Mode)",
+                "Custom physics engine for jumping, smashing, and particle effects",
+                "Responsive mobile controls with virtual joystick and touch action buttons"
+            ]
+        },
+        "phd_research": {
+            "title": "Climate Tech & Thermal Dynamics",
+            "innovation": "Solar-Regenerated Passive Cooling System",
+            "impact": "Achieved validated 50% energy reduction in cooling loads",
+            "methodology": "Synthesized large-scale environmental datasets from Japan & SE Asia to identify product-market fit"
+        },
+        "lakar_design": {
+            "growth": "100% YoY revenue growth for 8 consecutive years",
+            "scale": "Scaled to 40+ concurrent capital projects",
+            "strategy": "Disrupted market by standardizing 'affordable designer renovations' using UX strategy in physical spaces"
+        }
+    },
     "experience": [
         {
             "company": "Refil, Japan",
@@ -105,11 +136,11 @@
         "hobby": [
             {
                 "name": "Kanji Sniper",
-                "description": "Interactive Japanese kanji learning game"
+                "description": "Interactive Japanese kanji learning game using Tesseract.js OCR"
             },
             {
                 "name": "Demon Hunter",
-                "description": "Experimental action game built with HTML/JS"
+                "description": "Experimental action game built with Three.js and Web Audio API"
             },
             {
                 "name": "Momotaro Kids Book",
@@ -143,7 +174,7 @@
     },
     "fun_facts": [
         "Won the PAM Award 2017 for architecture in Malaysia",
-        "Created Kanji Sniper - an interactive Japanese learning game",
+        "Created Kanji Sniper - an OCR-based Japanese learning game",
         "Wrote a bilingual Momotaro children's book",
         "Runs a Nature Vibe YouTube channel",
         "Built a personal Smart Home Lab with IoT experiments"
