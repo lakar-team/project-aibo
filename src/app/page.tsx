@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import type { VRM } from '@pixiv/three-vrm';
 import type { VrmViewerHandle } from '@/components/VrmViewer';
@@ -13,6 +14,9 @@ interface Message {
 }
 
 export default function Home() {
+  const searchParams = useSearchParams();
+  const isEmbedded = searchParams.get('embed') === 'true';
+
   const [status, setStatus] = useState("Ready. Click to talk or type below.");
   const [isListening, setIsListening] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -245,7 +249,7 @@ export default function Home() {
         {/* Left: 3D Avatar */}
         <div className="relative flex h-[40vh] w-full items-center justify-center lg:h-full lg:w-1/2">
           <div className="relative h-full w-full">
-            <VrmViewer ref={vrmViewerRef} onLoaded={(vrm) => { vrmRef.current = vrm; }} />
+            <VrmViewer ref={vrmViewerRef} isEmbedded={isEmbedded} onLoaded={(vrm) => { vrmRef.current = vrm; }} />
             <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-[#050505] via-transparent to-transparent" />
           </div>
 

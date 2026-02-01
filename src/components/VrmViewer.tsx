@@ -7,13 +7,14 @@ import { VRMLoaderPlugin, VRMUtils, VRM } from '@pixiv/three-vrm';
 
 interface VrmViewerProps {
     onLoaded?: (vrm: VRM) => void;
+    isEmbedded?: boolean;
 }
 
 export interface VrmViewerHandle {
     speakWithLipSync: (text: string) => void;
 }
 
-const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded }, ref) => {
+const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded, isEmbedded }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const vrmRef = useRef<VRM | null>(null);
     const isSpeakingRef = useRef(false);
@@ -41,7 +42,12 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded }, ref
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(30, containerRef.current.clientWidth / containerRef.current.clientHeight, 0.1, 20.0);
-        camera.position.set(0.0, 1.4, 1.5);
+        // Embedded mode: focus on neck/face area; Standalone: full body
+        if (isEmbedded) {
+            camera.position.set(0.0, 1.55, 0.8); // Closer, aimed at neck
+        } else {
+            camera.position.set(0.0, 1.4, 1.5); // Full body framing
+        }
 
         const light = new THREE.DirectionalLight(0xffffff, 1.0);
         light.position.set(1.0, 1.0, 1.0).normalize();
@@ -190,7 +196,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded }, ref
                 currentContainer.removeChild(renderer.domElement);
             }
         };
-    }, [onLoaded]);
+    }, [onLoaded, isEmbedded]);
 
     return <div ref={containerRef} className="h-full w-full" />;
 });
