@@ -21,17 +21,66 @@ export default function Home() {
   const vrmRef = useRef<VRM | null>(null);
   const vrmViewerRef = useRef<VrmViewerHandle>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastInteractionRef = useRef<number>(Date.now());
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMessage = async (text: string) => {
+  // Idle conversation timer (2.5 minutes = 150000ms)
+  useEffect(() => {
+    const IDLE_TIMEOUT = 150000; // 2.5 minutes
+
+    const checkIdle = () => {
+      const timeSinceLastInteraction = Date.now() - lastInteractionRef.current;
+      if (timeSinceLastInteraction >= IDLE_TIMEOUT && !isThinking) {
+        triggerIdleConversation();
+      }
+    };
+
+    idleTimerRef.current = setInterval(checkIdle, 30000); // Check every 30 seconds
+
+    return () => {
+      if (idleTimerRef.current) clearInterval(idleTimerRef.current);
+    };
+  }, [isThinking]);
+
+  const triggerIdleConversation = async () => {
+    lastInteractionRef.current = Date.now(); // Reset timer
+    setIsThinking(true);
+    setStatus("Web Witch is thinking...");
+
+    try {
+      const response = await fetch('/api/brain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: "Start a conversation about your master Adam.", isIdlePrompt: true })
+      });
+
+      const data = await response.json();
+      if (data.reply) {
+        setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+        setStatus("Web Witch: " + data.reply.substring(0, 40) + "...");
+        speak(data.reply);
+      }
+    } catch (err) {
+      console.error("Idle conversation error:", err);
+    } finally {
+      setIsThinking(false);
+    }
+  };
+
+  const sendMessage = async (text: string, isIdle = false) => {
     if (!text.trim()) return;
 
-    // Add user message
-    setMessages(prev => [...prev, { role: 'user', content: text }]);
+    lastInteractionRef.current = Date.now(); // Reset idle timer
+
+    // Add user message (unless idle prompt)
+    if (!isIdle) {
+      setMessages(prev => [...prev, { role: 'user', content: text }]);
+    }
     setInputText("");
     setIsThinking(true);
     setStatus("Thinking...");
@@ -40,14 +89,14 @@ export default function Home() {
       const response = await fetch('/api/brain', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text })
+        body: JSON.stringify({ message: text, isIdlePrompt: isIdle })
       });
 
       const data = await response.json();
 
       if (data.reply) {
         setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
-        setStatus("Lakar: " + data.reply.substring(0, 50) + "...");
+        setStatus("Web Witch: " + data.reply.substring(0, 40) + "...");
         speak(data.reply);
       } else {
         setStatus("Error: " + (data.error || "Unknown"));
@@ -164,7 +213,7 @@ export default function Home() {
             {messages.length === 0 && (
               <div className="flex h-full items-center justify-center text-center text-zinc-600">
                 <div>
-                  <p className="text-lg font-medium text-zinc-400">Talk or chat with Lakar</p>
+                  <p className="text-lg font-medium text-zinc-400">Talk or chat with Web Witch</p>
                   <p className="mt-2 text-sm">Click the microphone or type below</p>
                 </div>
               </div>
@@ -176,7 +225,7 @@ export default function Home() {
                   : 'bg-white/5 text-zinc-300 border border-white/10'
                   }`}>
                   {msg.role === 'assistant' && (
-                    <div className="mb-1 text-xs font-medium text-[#00f2ff]">Lakar</div>
+                    <div className="mb-1 text-xs font-medium text-[#7000ff]">🔮 Web Witch</div>
                   )}
                   {msg.content}
                 </div>

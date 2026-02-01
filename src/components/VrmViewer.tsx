@@ -102,6 +102,29 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded }, ref
                     if (head) {
                         head.rotation.y = Math.sin(elapsed * swaySpeed * 0.3) * swayAmount * 0.5;
                     }
+
+                    // === ARM ANIMATIONS (fix T-pose) ===
+                    // Lower arms to a natural resting position
+                    const leftUpperArm = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+                    const rightUpperArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+                    const leftLowerArm = vrm.humanoid.getNormalizedBoneNode('leftLowerArm');
+                    const rightLowerArm = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
+
+                    if (leftUpperArm) {
+                        // Rest position + gentle sway
+                        leftUpperArm.rotation.z = 1.2 + Math.sin(elapsed * swaySpeed * 0.8) * 0.03;
+                        leftUpperArm.rotation.x = Math.sin(elapsed * swaySpeed * 0.5) * 0.02;
+                    }
+                    if (rightUpperArm) {
+                        rightUpperArm.rotation.z = -1.2 + Math.sin(elapsed * swaySpeed * 0.8 + 0.5) * 0.03;
+                        rightUpperArm.rotation.x = Math.sin(elapsed * swaySpeed * 0.5 + 0.3) * 0.02;
+                    }
+                    if (leftLowerArm) {
+                        leftLowerArm.rotation.y = -0.3 + Math.sin(elapsed * swaySpeed * 0.6) * 0.02;
+                    }
+                    if (rightLowerArm) {
+                        rightLowerArm.rotation.y = 0.3 + Math.sin(elapsed * swaySpeed * 0.6 + 0.2) * 0.02;
+                    }
                 }
 
                 // === NATURAL BLINKING ===

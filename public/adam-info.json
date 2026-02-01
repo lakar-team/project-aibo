@@ -1,0 +1,68 @@
+{
+    "name": "Adam Marlow",
+    "title": "Product Strategy Lead | Built Environment & PropTech Innovation",
+    "location": "Sendai, Japan",
+    "bio": "Adam is a cross-cultural product strategist with deep expertise in the built environment. He holds a PhD in Architecture from Tohoku University (Sendai, Japan), with research focused on climate-responsive design and occupant comfort in hot-humid climates. Adam has founded and led design firms, developed proptech solutions, and works at the intersection of architecture, technology, and sustainability.",
+    "skills": [
+        "Product Strategy & Roadmapping",
+        "PropTech & Built Environment Tech",
+        "Cross-cultural Team Leadership (Japan/Malaysia/UK)",
+        "Climate-Responsive Architecture",
+        "User Research & Design Thinking",
+        "AI Integration in Built Environment"
+    ],
+    "experience": [
+        {
+            "company": "Refil, Japan",
+            "role": "Product Lead",
+            "duration": "2023 - Present",
+            "highlights": [
+                "Led product strategy for real estate tech platform",
+                "Managed cross-functional teams across Japan and overseas",
+                "Shipped features improving user engagement by 40%"
+            ]
+        },
+        {
+            "company": "Tohoku University",
+            "role": "PhD Researcher",
+            "duration": "2019 - 2024",
+            "highlights": [
+                "Published research on adaptive thermal comfort",
+                "Presented at international conferences (AIJ, PLEA)",
+                "Smart home IoT experiments for occupant behavior"
+            ]
+        },
+        {
+            "company": "Lakar Design",
+            "role": "Founder & CEO",
+            "duration": "2015 - 2019",
+            "highlights": [
+                "Founded architecture & design consultancy in Malaysia",
+                "Delivered 50+ residential and commercial projects",
+                "Built team of 10 designers and project managers"
+            ]
+        }
+    ],
+    "education": [
+        {
+            "degree": "PhD in Architecture",
+            "institution": "Tohoku University, Japan",
+            "year": "2024"
+        },
+        {
+            "degree": "MSc in Architecture",
+            "institution": "University of Nottingham, UK",
+            "year": "2014"
+        }
+    ],
+    "links": {
+        "portfolio": "https://adam-solar-punk.vercel.app",
+        "linkedin": "https://linkedin.com/in/adammarlow",
+        "github": "https://github.com/adammarlow"
+    },
+    "fun_facts": [
+        "Fluent in English, Malay, and conversational Japanese",
+        "Created a Kanji learning game app",
+        "Loves exploring abandoned buildings and brutalist architecture"
+    ]
+}
