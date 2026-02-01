@@ -29,6 +29,58 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // WARM-UP: Trigger welcome message on page load to pre-connect AI and speech
+  useEffect(() => {
+    const warmupTimer = setTimeout(() => {
+      if (messages.length === 0 && !isThinking) {
+        console.log("[Web Witch] Warming up AI connection...");
+        triggerWelcome();
+      }
+    }, 2000); // Wait 2 seconds after page load
+
+    return () => clearTimeout(warmupTimer);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const triggerWelcome = async () => {
+    setIsThinking(true);
+    setStatus("Web Witch is waking up...");
+
+    // Try up to 5 times with increasing delays
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      try {
+        console.log(`[Web Witch] Welcome attempt ${attempt}/5...`);
+        const response = await fetch('/api/brain', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: "Greet the visitor warmly and introduce yourself briefly.", isIdlePrompt: true })
+        });
+
+        const data = await response.json();
+        if (data.reply) {
+          setMessages([{ role: 'assistant', content: data.reply }]);
+          setStatus("Web Witch: " + data.reply.substring(0, 40) + "...");
+          speak(data.reply);
+          setIsThinking(false);
+          lastInteractionRef.current = Date.now();
+          return; // Success!
+        }
+
+        // If we got an error, wait and retry
+        if (data.error) {
+          console.warn(`[Web Witch] Attempt ${attempt} failed:`, data.error);
+          await new Promise(r => setTimeout(r, 1000 * attempt)); // Exponential backoff
+        }
+      } catch (err) {
+        console.error(`[Web Witch] Attempt ${attempt} network error:`, err);
+        await new Promise(r => setTimeout(r, 1000 * attempt));
+      }
+    }
+
+    // All attempts failed - show fallback message
+    setStatus("Web Witch is resting... Type to wake her!");
+    setIsThinking(false);
+  };
+
   // Idle conversation timer (2.5 minutes = 150000ms)
   useEffect(() => {
     const IDLE_TIMEOUT = 150000; // 2.5 minutes
