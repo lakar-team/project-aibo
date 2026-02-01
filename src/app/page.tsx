@@ -311,10 +311,16 @@ function HomeContent() {
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Type a message..."
-                className="flex-1 rounded-full bg-white/5 px-6 py-3 text-white placeholder-zinc-500 outline-none border border-white/10 focus:border-[#00f2ff]/50 transition-colors"
-                disabled={isThinking}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!isThinking && inputText.trim()) {
+                      sendMessage(inputText);
+                    }
+                  }
+                }}
+                placeholder={isThinking ? "Web Witch is thinking..." : "Type a message..."}
+                className={`flex-1 rounded-full bg-white/5 px-6 py-3 text-white placeholder-zinc-500 outline-none border border-white/10 focus:border-[#00f2ff]/50 transition-colors ${isThinking ? 'opacity-50' : 'opacity-100'}`}
               />
               <button
                 onClick={() => sendMessage(inputText)}
