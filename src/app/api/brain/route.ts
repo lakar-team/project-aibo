@@ -31,7 +31,7 @@ export async function POST(req: Request) {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                "model": "meta-llama/llama-3.3-70b-instruct:free", // Free model
+                "model": "google/gemini-2.0-flash-exp:free", // Improved free model reliability
                 "messages": messages,
             })
         });
@@ -40,7 +40,9 @@ export async function POST(req: Request) {
 
         if (data.error) {
             console.error("OpenRouter API Error:", data.error);
-            return NextResponse.json({ error: data.error.message || "Failed to get response from OpenRouter" }, { status: 500 });
+            return NextResponse.json({
+                error: `OpenRouter Error: ${data.error.message} (Code: ${data.error.code || 'unknown'})`
+            }, { status: 500 });
         }
 
         const replyText = data.choices[0].message.content;
