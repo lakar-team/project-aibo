@@ -1,68 +1,151 @@
 {
-    "name": "Adam Marlow",
+    "name": "Adam M. Raman",
     "title": "Product Strategy Lead | Built Environment & PropTech Innovation",
-    "location": "Sendai, Japan",
-    "bio": "Adam is a cross-cultural product strategist with deep expertise in the built environment. He holds a PhD in Architecture from Tohoku University (Sendai, Japan), with research focused on climate-responsive design and occupant comfort in hot-humid climates. Adam has founded and led design firms, developed proptech solutions, and works at the intersection of architecture, technology, and sustainability.",
+    "tagline": "Ex-Founder & R&D Specialist driving Digital Transformation",
+    "location": "Sendai, Japan (Open to Relocation / Hybrid in Tokyo)",
+    "bio": "Ex-Founder and PhD Researcher with 10+ years of project leadership at the intersection of Architecture, Climate Tech, and Digital Transformation. Expert in AI-Assisted Workflows and Process Automation, bridging the gap between complex engineering hardware and agile business strategy. Proven track record of scaling companies to profitability and leading high-impact R&D.",
     "skills": [
-        "Product Strategy & Roadmapping",
-        "PropTech & Built Environment Tech",
-        "Cross-cultural Team Leadership (Japan/Malaysia/UK)",
-        "Climate-Responsive Architecture",
-        "User Research & Design Thinking",
-        "AI Integration in Built Environment"
+        "Product Lifecycle Management",
+        "Agile Methodologies",
+        "Stakeholder Management",
+        "Go-to-Market Strategy",
+        "P&L Ownership",
+        "IoT & Smart Home Integration",
+        "Energy Data Analysis",
+        "AI-Assisted Workflow Design",
+        "Process Automation",
+        "BIM (Building Information Modeling)",
+        "Sustainable HVAC",
+        "Technical Documentation"
     ],
     "experience": [
         {
             "company": "Refil, Japan",
-            "role": "Product Lead",
-            "duration": "2023 - Present",
+            "role": "Product & Innovation Consultant",
+            "duration": "2025 – Present",
+            "focus": "Digital Transformation & Operational Efficiency",
             "highlights": [
-                "Led product strategy for real estate tech platform",
-                "Managed cross-functional teams across Japan and overseas",
-                "Shipped features improving user engagement by 40%"
+                "Architected end-to-end automated workflows for energy audits, reducing cycle times by 40%",
+                "Implemented AI agent-assisted research for market due diligence",
+                "Bridged physical engineering assets and business objectives through data-driven modeling"
             ]
         },
         {
-            "company": "Tohoku University",
-            "role": "PhD Researcher",
-            "duration": "2019 - 2024",
+            "company": "Tohoku University, Japan",
+            "role": "Climate Tech Researcher (PhD)",
+            "duration": "2022 – 2025",
+            "focus": "R&D Leadership & Climate Hardware",
             "highlights": [
-                "Published research on adaptive thermal comfort",
-                "Presented at international conferences (AIJ, PLEA)",
-                "Smart home IoT experiments for occupant behavior"
+                "Engineered novel solar-regenerated passive cooling system (50% energy reduction)",
+                "Synthesized large-scale environmental/regulatory datasets from Japan and SE Asia",
+                "Presented at 2024 Kyoto AIJ Conference"
             ]
         },
         {
-            "company": "Lakar Design",
+            "company": "Lakar Design, Malaysia",
             "role": "Founder & CEO",
-            "duration": "2015 - 2019",
+            "duration": "2012 – 2022",
+            "focus": "Growth, Disruption, and UX in Physical Spaces",
             "highlights": [
-                "Founded architecture & design consultancy in Malaysia",
-                "Delivered 50+ residential and commercial projects",
-                "Built team of 10 designers and project managers"
+                "Scaled from zero to 40+ concurrent capital projects",
+                "Achieved 100% YoY revenue growth for 8 consecutive years",
+                "Pioneered 'affordable designer renovations' and early IoT-integrated living environments"
+            ]
+        },
+        {
+            "company": "S&A Architects, Malaysia",
+            "role": "Lead Architect",
+            "duration": "Prior to Lakar",
+            "highlights": [
+                "Won PAM Award 2017 for Denai Alam Phase J15",
+                "Led architectural design and project delivery in Shah Alam"
             ]
         }
     ],
     "education": [
         {
-            "degree": "PhD in Architecture",
+            "degree": "PhD in Climate Technology & Thermal Dynamics",
             "institution": "Tohoku University, Japan",
-            "year": "2024"
+            "year": "2025",
+            "focus": "High-performance building integration, desiccant cooling systems"
         },
         {
-            "degree": "MSc in Architecture",
-            "institution": "University of Nottingham, UK",
-            "year": "2014"
+            "degree": "Master of Architecture (Part 2)",
+            "institution": "University (UK)",
+            "year": "Prior"
         }
     ],
+    "projects": {
+        "work": [
+            {
+                "name": "Refil Japan",
+                "description": "Product & Innovation Consultant driving digital transformation with automated workflows"
+            },
+            {
+                "name": "Power Lunch",
+                "description": "Dynamic host listing system for professional meetups with Stripe and Supabase",
+                "link": "https://power-lunch.pages.dev/"
+            },
+            {
+                "name": "Project Aibo",
+                "description": "AI-driven robotic companion project with hardware-software integration",
+                "link": "https://project-aibo.vercel.app/"
+            }
+        ],
+        "research": [
+            {
+                "name": "Climate Tech R&D (PhD)",
+                "description": "Novel passive cooling hardware with 50% efficiency gain, validated globally"
+            },
+            {
+                "name": "Cultural Engagement",
+                "description": "Malaysia-Japan architectural exchange, presented at Japan Institute of Architects"
+            }
+        ],
+        "hobby": [
+            {
+                "name": "Kanji Sniper",
+                "description": "Interactive Japanese kanji learning game"
+            },
+            {
+                "name": "Demon Hunter",
+                "description": "Experimental action game built with HTML/JS"
+            },
+            {
+                "name": "Momotaro Kids Book",
+                "description": "Bilingual Japanese-English children's book",
+                "link": "https://www.amazon.com/dp/B0GCV34Z4S"
+            },
+            {
+                "name": "Nature Vibe YouTube",
+                "description": "YouTube channel with serene nature vibes and ambiance",
+                "link": "https://www.youtube.com/@naturevibechannel"
+            },
+            {
+                "name": "Smart Home Lab",
+                "description": "Personal IoT and home automation experiments"
+            }
+        ],
+        "merch": [
+            {
+                "name": "Redbubble Shop",
+                "description": "Custom apparel from Stellar to Climate Tech collections",
+                "link": "https://www.redbubble.com/people/lakardesign/shop"
+            }
+        ]
+    },
     "links": {
-        "portfolio": "https://adam-solar-punk.vercel.app",
-        "linkedin": "https://linkedin.com/in/adammarlow",
-        "github": "https://github.com/adammarlow"
+        "portfolio": "https://solar-punk-five.vercel.app",
+        "github": "https://github.com/lakar-team",
+        "shop": "https://www.redbubble.com/people/lakardesign/shop",
+        "youtube": "https://www.youtube.com/@naturevibechannel",
+        "amazon_book": "https://www.amazon.com/dp/B0GCV34Z4S"
     },
     "fun_facts": [
-        "Fluent in English, Malay, and conversational Japanese",
-        "Created a Kanji learning game app",
-        "Loves exploring abandoned buildings and brutalist architecture"
+        "Won the PAM Award 2017 for architecture in Malaysia",
+        "Created Kanji Sniper - an interactive Japanese learning game",
+        "Wrote a bilingual Momotaro children's book",
+        "Runs a Nature Vibe YouTube channel",
+        "Built a personal Smart Home Lab with IoT experiments"
     ]
 }
