@@ -192,9 +192,9 @@ Keep responses SHORT and conversational.`;
         const providers = [
             { name: "Google Gemini", fn: tryGoogleGemini },
             { name: "OpenRouter", fn: tryOpenRouter },
-            // Add more: { name: "Anthropic", fn: tryAnthropic },
         ];
 
+        const diagnostics: string[] = [];
         let lastError = "No providers configured";
 
         for (const provider of providers) {
@@ -210,14 +210,18 @@ Keep responses SHORT and conversational.`;
                 });
             }
 
+            const errorMsg = `${provider.name}: ${result.error || "unknown error"}`;
+            diagnostics.push(errorMsg);
             lastError = result.error || `${provider.name} failed`;
-            console.warn(`[Web Witch] ✗ ${provider.name} failed: ${lastError}`);
+            console.warn(`[Web Witch] ✗ ${errorMsg}`);
         }
 
-        // All providers failed
-        console.error("[Web Witch] All providers exhausted.");
+        // All providers failed - return helpful diagnostic
+        console.error("[Web Witch] All providers exhausted:", diagnostics);
         return NextResponse.json({
-            error: `All AI providers failed. Last error: ${lastError}`
+            error: `All AI providers failed.`,
+            diagnostics: diagnostics,
+            hint: "Check Vercel env vars: GOOGLE_GEMINI_API_KEY and OPENROUTER_API_KEY"
         }, { status: 503 });
 
     } catch (error: any) {
