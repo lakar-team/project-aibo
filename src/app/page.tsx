@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import type { VRM } from '@pixiv/three-vrm';
@@ -13,7 +13,8 @@ interface Message {
   content: string;
 }
 
-export default function Home() {
+// Inner component that uses useSearchParams
+function HomeContent() {
   const searchParams = useSearchParams();
   const isEmbedded = searchParams.get('embed') === 'true';
 
@@ -325,5 +326,14 @@ export default function Home() {
         </div>
       </main>
     </div>
+  );
+}
+
+// Wrap with Suspense for useSearchParams
+export default function Home() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#050505]" />}>
+      <HomeContent />
+    </Suspense>
   );
 }
