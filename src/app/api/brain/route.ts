@@ -2,11 +2,124 @@ import { NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 
+// ============================================================
+// MULTI-PROVIDER AI FALLBACK SYSTEM
+// Add new providers by creating a function and adding to PROVIDERS array
+// ============================================================
+
+interface ProviderResult {
+    success: boolean;
+    reply?: string;
+    model?: string;
+    error?: string;
+}
+
+// Provider 1: Google Gemini (Direct API)
+async function tryGoogleGemini(messages: any[]): Promise<ProviderResult> {
+    const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
+    if (!apiKey) return { success: false, error: "GOOGLE_GEMINI_API_KEY not configured" };
+
+    try {
+        console.log("[Web Witch] Trying Google Gemini...");
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: messages.map(m => ({
+                        role: m.role === "assistant" ? "model" : m.role === "system" ? "user" : m.role,
+                        parts: [{ text: m.content }]
+                    })),
+                    generationConfig: {
+                        maxOutputTokens: 500,
+                        temperature: 0.8
+                    }
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (data.error) {
+            throw new Error(data.error.message || "Gemini error");
+        }
+
+        if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+            return {
+                success: true,
+                reply: data.candidates[0].content.parts[0].text,
+                model: "google/gemini-1.5-flash"
+            };
+        }
+
+        throw new Error("No content in Gemini response");
+    } catch (err: any) {
+        console.warn("[Web Witch] Gemini failed:", err.message);
+        return { success: false, error: err.message };
+    }
+}
+
+// Provider 2: OpenRouter (with model rotation)
+async function tryOpenRouter(messages: any[]): Promise<ProviderResult> {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) return { success: false, error: "OPENROUTER_API_KEY not configured" };
+
+    const MODELS = [
+        "google/gemini-2.0-flash-exp:free",
+        "deepseek/deepseek-r1-distill-llama-70b:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "qwen/qwen-2.5-coder-32b-instruct:free",
+        "openrouter/free"
+    ];
+
+    for (const model of MODELS) {
+        try {
+            console.log(`[Web Witch] Trying OpenRouter model: ${model}`);
+            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${apiKey}`,
+                    "HTTP-Referer": "https://project-aibo.vercel.app",
+                    "X-Title": "Project AIBO - Web Witch",
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ model, messages })
+            });
+
+            const data = await response.json();
+
+            if (data.error) {
+                console.warn(`[Web Witch] OpenRouter ${model} failed:`, data.error.message);
+                continue; // Try next model
+            }
+
+            if (data.choices?.[0]?.message?.content) {
+                return {
+                    success: true,
+                    reply: data.choices[0].message.content,
+                    model: data.model || model
+                };
+            }
+        } catch (err: any) {
+            console.warn(`[Web Witch] OpenRouter ${model} error:`, err.message);
+            continue;
+        }
+    }
+
+    return { success: false, error: "All OpenRouter models failed" };
+}
+
+// ============================================================
+// ADD MORE PROVIDERS HERE (e.g., Anthropic, Mistral, Groq)
+// async function tryAnthropic(messages: any[]): Promise<ProviderResult> { ... }
+// ============================================================
+
+// Main handler
 export async function POST(req: Request) {
     try {
-        const { message, image, isIdlePrompt } = await req.json();
+        const { message, isIdlePrompt } = await req.json();
 
-        // Web Witch personality: Adam's portfolio guide
         const systemPrompt = `You are Web Witch, a mystical AI guide for Adam M. Raman's portfolio. You have a playful, slightly mischievous personality with a witchy vibe, but you're genuinely helpful.
 
 ABOUT YOUR MASTER ADAM:
@@ -73,70 +186,38 @@ Keep responses SHORT and conversational.`;
             { role: "user", content: message }
         ];
 
-        // Note: If image is provided, OpenRouter models that support vision (like gemini-pro-vision or certain qwen models) 
-        // would handle it differently. For now, we focus on the text-based free model.
-
-        const apiKey = process.env.OPENROUTER_API_KEY;
-        if (!apiKey) {
-            return NextResponse.json({ error: "OPENROUTER_API_KEY is not configured" }, { status: 500 });
-        }
-
-        // Claudish-style: Prioritized list of high-quality free models to cycle through
-        const FREE_MODELS = [
-            "google/gemini-2.0-flash-exp:free",           // Fastest & smartest free tier
-            "google/gemini-2.0-flash-thinking-exp:free",  // High reasoning capability
-            "deepseek/deepseek-r1-distill-llama-70b:free",// Strong logic
-            "meta-llama/llama-3.3-70b-instruct:free",     // Solid generalist
-            "qwen/qwen-2.5-coder-32b-instruct:free",      // Good for tech questions
-            "openrouter/free"                             // Ultimate fallback (auto-router)
+        // ============================================================
+        // PROVIDER PRIORITY ORDER - Edit this to change fallback order
+        // ============================================================
+        const providers = [
+            { name: "Google Gemini", fn: tryGoogleGemini },
+            { name: "OpenRouter", fn: tryOpenRouter },
+            // Add more: { name: "Anthropic", fn: tryAnthropic },
         ];
 
-        let lastError: any = null;
+        let lastError = "No providers configured";
 
-        for (const model of FREE_MODELS) {
-            try {
-                console.log(`[Web Witch] Attempting model: ${model}`);
-                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${apiKey}`,
-                        "HTTP-Referer": "https://project-aibo.vercel.app",
-                        "X-Title": "Project AIBO - Web Witch",
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        "model": model,
-                        "messages": messages,
-                    })
+        for (const provider of providers) {
+            console.log(`[Web Witch] === Trying provider: ${provider.name} ===`);
+            const result = await provider.fn(messages);
+
+            if (result.success && result.reply) {
+                console.log(`[Web Witch] ✓ Success with ${provider.name} (${result.model})`);
+                return NextResponse.json({
+                    reply: result.reply,
+                    model_used: result.model,
+                    provider: provider.name
                 });
-
-                const data = await response.json();
-
-                // If API returns an error (rate limit, overloaded), try next model
-                if (data.error) {
-                    console.warn(`[Web Witch] Model ${model} failed:`, data.error.message || data.error);
-                    throw new Error(data.error.message || "Model error");
-                }
-
-                if (data.choices && data.choices[0]) {
-                    const replyText = data.choices[0].message.content;
-                    console.log(`[Web Witch] Success with model: ${data.model || model}`);
-                    return NextResponse.json({ reply: replyText, model_used: data.model || model });
-                } else {
-                    throw new Error("No response content received");
-                }
-
-            } catch (err: any) {
-                console.warn(`[Web Witch] Failed with ${model}:`, err.message);
-                lastError = err;
-                // Continue to next model in the list...
             }
+
+            lastError = result.error || `${provider.name} failed`;
+            console.warn(`[Web Witch] ✗ ${provider.name} failed: ${lastError}`);
         }
 
-        // All models failed
-        console.error("[Web Witch] All models failed.");
+        // All providers failed
+        console.error("[Web Witch] All providers exhausted.");
         return NextResponse.json({
-            error: `All free models failed. Last error: ${lastError?.message || 'Unknown'}`
+            error: `All AI providers failed. Last error: ${lastError}`
         }, { status: 503 });
 
     } catch (error: any) {
