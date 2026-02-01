@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils, VRM } from '@pixiv/three-vrm';
 
 interface VrmViewerProps {
@@ -30,10 +30,14 @@ export default function VrmViewer({ onLoaded }: VrmViewerProps) {
         light.position.set(1.0, 1.0, 1.0).normalize();
         scene.add(light);
 
+        // Ambient light for better visibility
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
         // Load VRM
         const loader = new GLTFLoader();
-        loader.register((parser) => {
-            return new VRMLoaderPlugin(parser);
+        loader.register((parser: unknown) => {
+            return new VRMLoaderPlugin(parser as ConstructorParameters<typeof VRMLoaderPlugin>[0]);
         });
 
         loader.load(
@@ -47,8 +51,8 @@ export default function VrmViewer({ onLoaded }: VrmViewerProps) {
                 vrmRef.current = vrm;
                 if (onLoaded) onLoaded(vrm);
             },
-            (progress) => console.log('Loading... ' + (100.0 * progress.loaded / progress.total).toFixed(2) + '%'),
-            (error) => console.error(error)
+            (progress) => console.log('Loading avatar: ' + (100.0 * progress.loaded / progress.total).toFixed(2) + '%'),
+            (error) => console.error('Failed to load avatar:', error)
         );
 
         // Animation
@@ -73,12 +77,13 @@ export default function VrmViewer({ onLoaded }: VrmViewerProps) {
         };
         window.addEventListener('resize', handleResize);
 
+        const currentContainer = containerRef.current;
         return () => {
             window.removeEventListener('resize', handleResize);
             cancelAnimationFrame(animationId);
             renderer.dispose();
-            if (containerRef.current) {
-                containerRef.current.removeChild(renderer.domElement);
+            if (currentContainer && currentContainer.contains(renderer.domElement)) {
+                currentContainer.removeChild(renderer.domElement);
             }
         };
     }, [onLoaded]);
