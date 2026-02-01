@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect } from "react";
-import Image from "next/image";
 import dynamic from 'next/dynamic';
 import type { VRM } from '@pixiv/three-vrm';
+import type { VrmViewerHandle } from '@/components/VrmViewer';
 
 const VrmViewer = dynamic(() => import('@/components/VrmViewer'), { ssr: false });
 
@@ -19,6 +19,7 @@ export default function Home() {
   const [inputText, setInputText] = useState("");
   const [isThinking, setIsThinking] = useState(false);
   const vrmRef = useRef<VRM | null>(null);
+  const vrmViewerRef = useRef<VrmViewerHandle>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when messages change
@@ -110,12 +111,12 @@ export default function Home() {
       utterance.rate = 1.0;
     }
 
-    window.speechSynthesis.speak(utterance);
-
-    if (vrmRef.current) {
-      vrmRef.current.expressionManager?.setValue('aa', 0.5);
-      setTimeout(() => vrmRef.current?.expressionManager?.setValue('aa', 0), 2000);
+    // Trigger lip sync through the VrmViewer ref
+    if (vrmViewerRef.current) {
+      vrmViewerRef.current.speakWithLipSync(text);
     }
+
+    window.speechSynthesis.speak(utterance);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -143,7 +144,7 @@ export default function Home() {
         {/* Left: 3D Avatar */}
         <div className="relative flex h-[40vh] w-full items-center justify-center lg:h-full lg:w-1/2">
           <div className="relative h-full w-full">
-            <VrmViewer onLoaded={(vrm) => { vrmRef.current = vrm; }} />
+            <VrmViewer ref={vrmViewerRef} onLoaded={(vrm) => { vrmRef.current = vrm; }} />
             <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-[#050505] via-transparent to-transparent" />
           </div>
 

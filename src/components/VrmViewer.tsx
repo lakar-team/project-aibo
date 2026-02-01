@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils, VRM } from '@pixiv/three-vrm';
@@ -9,14 +9,31 @@ interface VrmViewerProps {
     onLoaded?: (vrm: VRM) => void;
 }
 
-export default function VrmViewer({ onLoaded }: VrmViewerProps) {
+export interface VrmViewerHandle {
+    speakWithLipSync: (text: string) => void;
+}
+
+const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const vrmRef = useRef<VRM | null>(null);
+    const isSpeakingRef = useRef(false);
+
+    // Expose lip sync function to parent
+    useImperativeHandle(ref, () => ({
+        speakWithLipSync: (text: string) => {
+            isSpeakingRef.current = true;
+            // Estimate speech duration based on text length (~100ms per character)
+            const duration = Math.min(text.length * 80, 10000);
+            setTimeout(() => {
+                isSpeakingRef.current = false;
+            }, duration);
+        }
+    }));
 
     useEffect(() => {
         if (!containerRef.current) return;
 
-        // Setup
+        // Setup renderer
         const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
         renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
@@ -30,7 +47,6 @@ export default function VrmViewer({ onLoaded }: VrmViewerProps) {
         light.position.set(1.0, 1.0, 1.0).normalize();
         scene.add(light);
 
-        // Ambient light for better visibility
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
         scene.add(ambientLight);
 
@@ -55,20 +71,85 @@ export default function VrmViewer({ onLoaded }: VrmViewerProps) {
             (error) => console.error('Failed to load avatar:', error)
         );
 
-        // Animation
+        // Animation state
         const clock = new THREE.Clock();
         let animationId: number;
+        let blinkTimer = 0;
+        let nextBlinkTime = Math.random() * 3 + 2; // Random blink every 2-5 seconds
+        let isBlinking = false;
+        let blinkProgress = 0;
 
         const animate = () => {
             animationId = requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const elapsed = clock.getElapsedTime();
+
             if (vrmRef.current) {
-                vrmRef.current.update(clock.getDelta());
+                const vrm = vrmRef.current;
+                vrm.update(delta);
+
+                // === NATURAL BODY SWAY ===
+                // Gentle swaying motion using sine waves
+                const swayAmount = 0.02;
+                const swaySpeed = 0.5;
+                if (vrm.humanoid) {
+                    const spine = vrm.humanoid.getNormalizedBoneNode('spine');
+                    if (spine) {
+                        spine.rotation.z = Math.sin(elapsed * swaySpeed) * swayAmount;
+                        spine.rotation.x = Math.sin(elapsed * swaySpeed * 0.7) * swayAmount * 0.5;
+                    }
+                    const head = vrm.humanoid.getNormalizedBoneNode('head');
+                    if (head) {
+                        head.rotation.y = Math.sin(elapsed * swaySpeed * 0.3) * swayAmount * 0.5;
+                    }
+                }
+
+                // === NATURAL BLINKING ===
+                blinkTimer += delta;
+                if (!isBlinking && blinkTimer >= nextBlinkTime) {
+                    isBlinking = true;
+                    blinkProgress = 0;
+                }
+
+                if (isBlinking) {
+                    blinkProgress += delta * 8; // Blink speed
+                    const blinkValue = blinkProgress < 0.5
+                        ? blinkProgress * 2 // Closing
+                        : 2 - blinkProgress * 2; // Opening
+
+                    vrm.expressionManager?.setValue('blink', Math.max(0, Math.min(1, blinkValue)));
+
+                    if (blinkProgress >= 1) {
+                        isBlinking = false;
+                        blinkTimer = 0;
+                        nextBlinkTime = Math.random() * 3 + 2; // Reset random interval
+                        vrm.expressionManager?.setValue('blink', 0);
+                    }
+                }
+
+                // === LIP SYNC (when speaking) ===
+                if (isSpeakingRef.current) {
+                    // Simulate mouth movement with varying vowel shapes
+                    const mouthOpenAmount = (Math.sin(elapsed * 12) + 1) * 0.3 + 0.1;
+                    const aaAmount = (Math.sin(elapsed * 15) + 1) * 0.25;
+                    const ohAmount = (Math.cos(elapsed * 10) + 1) * 0.15;
+
+                    vrm.expressionManager?.setValue('aa', aaAmount);
+                    vrm.expressionManager?.setValue('oh', ohAmount);
+                    vrm.expressionManager?.setValue('ee', (Math.sin(elapsed * 8) + 1) * 0.1);
+                } else {
+                    // Reset mouth when not speaking
+                    vrm.expressionManager?.setValue('aa', 0);
+                    vrm.expressionManager?.setValue('oh', 0);
+                    vrm.expressionManager?.setValue('ee', 0);
+                }
             }
+
             renderer.render(scene, camera);
         };
         animate();
 
-        // Resize
+        // Resize handler
         const handleResize = () => {
             if (!containerRef.current) return;
             renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
@@ -89,4 +170,8 @@ export default function VrmViewer({ onLoaded }: VrmViewerProps) {
     }, [onLoaded]);
 
     return <div ref={containerRef} className="h-full w-full" />;
-}
+});
+
+VrmViewer.displayName = 'VrmViewer';
+
+export default VrmViewer;
