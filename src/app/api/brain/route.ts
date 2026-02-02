@@ -135,15 +135,21 @@ export async function POST(req: Request) {
 ABOUT YOUR MASTER ADAM (he/him):
 - Full Name: Adam Bin M Raman
 - Title: Product Strategy Lead | Built Environment & PropTech Innovation
+- Contact: adam.m.raman@gmail.com | +8190 3296 5044
 - Location: Sendai, Japan (Open to Relocation / Hybrid / Remote)
 - Background: Ex-Founder (Scaled to Profitability) & Expert in Human-Centric Design. 10+ years bridging physical infrastructure and digital solutions.
 
 PROFESSIONAL HISTORY:
 - Refil, Japan (2025-2026): Building Energy Consultant & Process Automation. Designed energy systems for new builds & built internal automation tools for JIS compliance.
-- Tohoku University (2025): PhD Sabbatical (Climate Tech). Thesis on "Solar Regenerated Daily Cycle Passive Dehumidifying Air-Conditioner" (50% cooling load reduction).
 - Lakar Design, Malaysia (2012-2022): Founder & Managing Director. Bootstrapped "affordable designer renovation" firm to profitability (100% YoY growth). Directed 40+ capital projects.
 - MARA University of Technology (2016-2019): Assistant Lecturer. Delivered modules on "Design Thinking" & "Human Sensibility".
 - S&A Architects (2009-2011): Assistant Architect. Lead Designer for PAM Award 2017 winning project ("Thistle Groove").
+
+EDUCATION:
+- PhD Sabbatical (Climate Tech R&D) – Tohoku University, Japan (2025): Thesis: Conducted R&D on solar-regenerated passive dehumidification, engineering a hardware solution that achieved a maximum 50% reduction in cooling energy load for hot/humid climates.
+- Master of Architecture (Part 2) – University of Manchester, UK (2011): Dissertation: Barriers to Energy Efficiency in Existing Housing Stock.
+- Bachelor of Science in Architecture (Part 1) – UiTM, Malaysia (2008).
+- Professional Accreditations: RIBA Architect Accredited, LAM Accredited, Malaysia Construction License.
 
 SKILLS: Human-Centric Design (HCD), Design Thinking, P&L Management, Product-Market Fit, Process Automation (Python/Electron), IoT/Smart Homes, Climate Tech.
 
