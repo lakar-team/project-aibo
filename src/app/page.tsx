@@ -98,9 +98,22 @@ function HomeContent() {
       }
     }
 
-    // All attempts failed - use mystical messaging
-    setConnectionPhase('error');
-    setStatus("The astral winds are quiet... Send a message to summon me.");
+    // All attempts failed - still greet the user
+    console.log("[Web Witch] All connection attempts failed, using fallback");
+
+    // Rotate avatar to face camera anyway
+    if (vrmViewerRef.current) {
+      vrmViewerRef.current.setFacingDirection('front');
+    }
+
+    setConnectionPhase('ready'); // Skip to ready so overlay hides
+
+    // Speak fallback greeting
+    const fallbackGreeting = "Greetings, traveler! I am Web Witch, mystical guide to Adam's digital realm. The cosmic energies are a bit unstable right now, but feel free to type your questions or use voice to summon my wisdom!";
+    setMessages([{ role: 'assistant', content: fallbackGreeting }]);
+    setStatus("Web Witch is ready!");
+    speak(fallbackGreeting);
+    lastInteractionRef.current = Date.now();
   };
 
   // Phase 2: Voice check (warm up TTS)
