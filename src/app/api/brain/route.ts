@@ -75,12 +75,27 @@ async function tryOpenRouter(messages: any[]): Promise<ProviderResult> {
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) return { success: false, error: "OPENROUTER_API_KEY not configured" };
 
+    // Expanded list of free models - tried in order
     const MODELS = [
+        // Top tier - newest and most capable
+        "google/gemini-2.5-pro-exp-03-25:free",
+        "meta-llama/llama-4-maverick:free",
+        "meta-llama/llama-4-scout:free",
+        "deepseek/r1-0528:free",
         "google/gemini-2.0-flash-exp:free",
-        "deepseek/deepseek-r1-distill-llama-70b:free",
+
+        // Strong general purpose
         "meta-llama/llama-3.3-70b-instruct:free",
-        "qwen/qwen-2.5-coder-32b-instruct:free",
-        "openrouter/free"
+        "deepseek/deepseek-chat-v3-0324:free",
+        "qwen/qwen3-4b:free",
+
+        // Reliable fallbacks
+        "mistralai/mistral-small-3.1-24b-instruct:free",
+        "google/gemma-3-27b:free",
+        "nvidia/llama-3.1-nemotron-nano-8b-v1:free",
+
+        // Last resort - auto-router
+        "openrouter/auto"
     ];
 
     for (const model of MODELS) {
