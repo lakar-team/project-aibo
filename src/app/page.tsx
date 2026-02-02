@@ -40,13 +40,11 @@ function HomeContent() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Track if VRM is loaded for initial rotation
+  const vrmLoadedRef = useRef(false);
+
   // INTERGALACTIC DIALING: Multi-phase connection experience
   useEffect(() => {
-    // Start with avatar facing away
-    if (vrmViewerRef.current) {
-      vrmViewerRef.current.setFacingDirection('back');
-    }
-
     const dialingTimer = setTimeout(() => {
       if (messages.length === 0 && !isThinking) {
         console.log("[Web Witch] Initiating interdimensional connection...");
@@ -56,6 +54,16 @@ function HomeContent() {
 
     return () => clearTimeout(dialingTimer);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Callback when VRM loads - set initial facing direction
+  const handleVrmLoaded = (vrm: any) => {
+    vrmRef.current = vrm;
+    vrmLoadedRef.current = true;
+    // Start facing away if we're still in dialing phase
+    if (connectionPhase !== 'ready' && vrmViewerRef.current) {
+      vrmViewerRef.current.setFacingDirection('back');
+    }
+  };
 
   // Phase 1: Establish AI connection (silent)
   const initiateConnection = async () => {
@@ -81,7 +89,7 @@ function HomeContent() {
 
         if (data.error) {
           console.warn(`[Web Witch] Attempt ${attempt} failed:`, data.error);
-          setStatus(`Retry ${attempt}/5...`);
+          setStatus(`Gathering arcane energy... (${attempt}/5)`);
           await new Promise(r => setTimeout(r, 1000 * attempt));
         }
       } catch (err) {
@@ -90,9 +98,9 @@ function HomeContent() {
       }
     }
 
-    // All attempts failed
+    // All attempts failed - use mystical messaging
     setConnectionPhase('error');
-    setStatus("Connection unstable... Type to establish link.");
+    setStatus("The astral winds are quiet... Send a message to summon me.");
   };
 
   // Phase 2: Voice check (warm up TTS)
@@ -134,7 +142,7 @@ function HomeContent() {
 
     setConnectionPhase('ready');
     setIsThinking(true);
-    setStatus("Connection established!");
+    setStatus("Link forged!");
 
     // Fetch the real AI greeting
     try {
@@ -323,32 +331,52 @@ function HomeContent() {
         {/* Left: 3D Avatar */}
         <div className={`${isEmbedded ? 'absolute inset-0 z-0 h-full w-full' : 'relative flex h-[40vh] w-full items-center justify-center lg:h-full lg:w-1/2'}`}>
           <div className="relative h-full w-full">
-            <VrmViewer ref={vrmViewerRef} isEmbedded={isEmbedded} onLoaded={(vrm) => { vrmRef.current = vrm; }} />
+            <VrmViewer ref={vrmViewerRef} isEmbedded={isEmbedded} onLoaded={handleVrmLoaded} />
             <div className={`absolute inset-0 pointer-events-none ${isEmbedded ? 'bg-gradient-to-b from-black/30 via-transparent to-black/60' : 'bg-gradient-to-t from-[#050505] via-transparent to-transparent'}`} />
 
-            {/* Intergalactic Dialing Overlay */}
+            {/* Mystical Summoning Overlay */}
             {connectionPhase !== 'ready' && (
               <div className="absolute inset-0 flex flex-col items-center justify-center z-20 transition-opacity duration-1000">
-                {/* Pulsing Rings */}
+                {/* Rotating Summoning Circle */}
                 <div className="relative flex items-center justify-center">
-                  <div className="absolute w-32 h-32 rounded-full border-2 border-[#00f2ff]/30 animate-ping" style={{ animationDuration: '2s' }} />
-                  <div className="absolute w-48 h-48 rounded-full border border-[#7000ff]/20 animate-ping" style={{ animationDuration: '3s' }} />
-                  <div className="absolute w-64 h-64 rounded-full border border-[#00f2ff]/10 animate-ping" style={{ animationDuration: '4s' }} />
+                  {/* Outer rotating ring with glyphs */}
+                  <div className="absolute w-72 h-72 rounded-full border border-[#7000ff]/40 animate-spin" style={{ animationDuration: '20s' }}>
+                    {/* Arcane symbols positioned around the ring */}
+                    {['✧', '◇', '✦', '◈', '✧', '◇', '✦', '◈'].map((glyph, i) => (
+                      <span
+                        key={i}
+                        className="absolute text-[#00f2ff]/60 text-lg"
+                        style={{
+                          left: '50%',
+                          top: '50%',
+                          transform: `rotate(${i * 45}deg) translateY(-140px) rotate(-${i * 45}deg)`,
+                        }}
+                      >
+                        {glyph}
+                      </span>
+                    ))}
+                  </div>
 
-                  {/* Center Glyph */}
-                  <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-[#00f2ff]/20 to-[#7000ff]/20 backdrop-blur-sm border border-[#00f2ff]/50 flex items-center justify-center">
-                    <div className="w-3 h-3 rounded-full bg-[#00f2ff] animate-pulse" />
+                  {/* Middle rotating ring (opposite direction) */}
+                  <div className="absolute w-52 h-52 rounded-full border-2 border-[#00f2ff]/30" style={{ animation: 'spin 15s linear infinite reverse' }} />
+
+                  {/* Inner pulsing ring */}
+                  <div className="absolute w-36 h-36 rounded-full border border-[#00f2ff]/50 animate-pulse" />
+
+                  {/* Center mystical orb */}
+                  <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-[#00f2ff]/20 to-[#7000ff]/30 backdrop-blur-sm border-2 border-[#00f2ff]/60 flex items-center justify-center shadow-[0_0_40px_rgba(0,242,255,0.3)]">
+                    <div className="w-4 h-4 rounded-full bg-[#00f2ff] animate-pulse shadow-[0_0_20px_rgba(0,242,255,0.8)]" />
                   </div>
                 </div>
 
-                {/* Status Text */}
-                <div className="mt-12 text-center">
-                  <p className="text-[#00f2ff] text-sm font-mono tracking-wider animate-pulse">
-                    {connectionPhase === 'dialing' && 'ESTABLISHING LINK...'}
-                    {connectionPhase === 'voice-check' && 'CALIBRATING FREQUENCIES...'}
-                    {connectionPhase === 'error' && 'CONNECTION UNSTABLE'}
+                {/* Status Text - Mystical Language */}
+                <div className="mt-16 text-center">
+                  <p className="text-[#00f2ff] text-sm font-mono tracking-widest uppercase animate-pulse">
+                    {connectionPhase === 'dialing' && '✦ SUMMONING PRESENCE ✦'}
+                    {connectionPhase === 'voice-check' && '✧ ATTUNING ESSENCE ✧'}
+                    {connectionPhase === 'error' && '◈ AWAITING YOUR CALL ◈'}
                   </p>
-                  <p className="text-zinc-500 text-xs mt-2 font-mono">{status}</p>
+                  <p className="text-zinc-400 text-xs mt-3 font-light italic max-w-xs">{status}</p>
                 </div>
               </div>
             )}
