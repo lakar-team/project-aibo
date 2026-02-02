@@ -445,10 +445,26 @@ function HomeContent() {
                   {/* Inner pulsing ring */}
                   <div className="absolute w-36 h-36 rounded-full border border-[#00f2ff]/50 animate-pulse" />
 
-                  {/* Center mystical orb */}
-                  <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-[#00f2ff]/20 to-[#7000ff]/30 backdrop-blur-sm border-2 border-[#00f2ff]/60 flex items-center justify-center shadow-[0_0_40px_rgba(0,242,255,0.3)]">
-                    <div className="w-4 h-4 rounded-full bg-[#00f2ff] animate-pulse shadow-[0_0_20px_rgba(0,242,255,0.8)]" />
-                  </div>
+                  {/* Center mystical orb - SUMMON BELL (clickable) */}
+                  <button
+                    onClick={() => {
+                      // User interaction - now we can play audio!
+                      console.log("[Web Witch] Summon bell pressed!");
+                      if (vrmViewerRef.current) {
+                        vrmViewerRef.current.setFacingDirection('front');
+                      }
+                      setConnectionPhase('ready');
+                      const fallbackGreeting = "Greetings, traveler! I am Web Witch, mystical guide to Adam's digital realm. What knowledge do you seek?";
+                      setMessages([{ role: 'assistant', content: fallbackGreeting }]);
+                      setStatus("Web Witch is ready!");
+                      speak(fallbackGreeting);
+                      lastInteractionRef.current = Date.now();
+                    }}
+                    className="relative w-24 h-24 rounded-full bg-gradient-to-br from-[#00f2ff]/20 to-[#7000ff]/30 backdrop-blur-sm border-2 border-[#00f2ff]/60 flex items-center justify-center shadow-[0_0_40px_rgba(0,242,255,0.3)] cursor-pointer hover:scale-110 hover:shadow-[0_0_60px_rgba(0,242,255,0.5)] transition-all active:scale-95"
+                    aria-label="Summon Web Witch"
+                  >
+                    <span className="text-3xl">🔔</span>
+                  </button>
                 </div>
 
                 {/* Status Text - Mystical Language */}
@@ -456,9 +472,11 @@ function HomeContent() {
                   <p className="text-[#00f2ff] text-sm font-mono tracking-widest uppercase animate-pulse">
                     {connectionPhase === 'dialing' && '✦ SUMMONING PRESENCE ✦'}
                     {connectionPhase === 'voice-check' && '✧ ATTUNING ESSENCE ✧'}
-                    {connectionPhase === 'error' && '◈ AWAITING YOUR CALL ◈'}
                   </p>
                   <p className="text-zinc-400 text-xs mt-3 font-light italic max-w-xs">{status}</p>
+                  <p className="text-[#00f2ff]/80 text-xs mt-4 font-semibold animate-bounce">
+                    ↑ Tap the bell to summon me ↑
+                  </p>
                 </div>
               </div>
             )}
