@@ -28,6 +28,7 @@ function HomeContent() {
   // Connection phase for intergalactic dialing experience
   type ConnectionPhase = 'dialing' | 'voice-check' | 'ready' | 'error';
   const [connectionPhase, setConnectionPhase] = useState<ConnectionPhase>('dialing');
+  const [loadingComplete, setLoadingComplete] = useState(false); // Bell only shows after loading
 
   const vrmRef = useRef<VRM | null>(null);
   const vrmViewerRef = useRef<VrmViewerHandle>(null);
@@ -98,22 +99,10 @@ function HomeContent() {
       }
     }
 
-    // All attempts failed - still greet the user
-    console.log("[Web Witch] All connection attempts failed, using fallback");
-
-    // Rotate avatar to face camera anyway
-    if (vrmViewerRef.current) {
-      vrmViewerRef.current.setFacingDirection('front');
-    }
-
-    setConnectionPhase('ready'); // Skip to ready so overlay hides
-
-    // Speak fallback greeting
-    const fallbackGreeting = "Greetings, traveler! I am Web Witch, mystical guide to Adam's digital realm. The cosmic energies are a bit unstable right now, but feel free to type your questions or use voice to summon my wisdom!";
-    setMessages([{ role: 'assistant', content: fallbackGreeting }]);
-    setStatus("Web Witch is ready!");
-    speak(fallbackGreeting);
-    lastInteractionRef.current = Date.now();
+    // All attempts failed - show the bell for user interaction
+    console.log("[Web Witch] All connection attempts failed, showing summon bell");
+    setLoadingComplete(true); // Now show the bell
+    setStatus("Tap the bell to summon me...");
   };
 
   // Phase 2: Voice check (warm up TTS)
@@ -445,26 +434,33 @@ function HomeContent() {
                   {/* Inner pulsing ring */}
                   <div className="absolute w-36 h-36 rounded-full border border-[#00f2ff]/50 animate-pulse" />
 
-                  {/* Center mystical orb - SUMMON BELL (clickable) */}
-                  <button
-                    onClick={() => {
-                      // User interaction - now we can play audio!
-                      console.log("[Web Witch] Summon bell pressed!");
-                      if (vrmViewerRef.current) {
-                        vrmViewerRef.current.setFacingDirection('front');
-                      }
-                      setConnectionPhase('ready');
-                      const fallbackGreeting = "Greetings, traveler! I am Web Witch, mystical guide to Adam's digital realm. What knowledge do you seek?";
-                      setMessages([{ role: 'assistant', content: fallbackGreeting }]);
-                      setStatus("Web Witch is ready!");
-                      speak(fallbackGreeting);
-                      lastInteractionRef.current = Date.now();
-                    }}
-                    className="relative w-24 h-24 rounded-full bg-gradient-to-br from-[#00f2ff]/20 to-[#7000ff]/30 backdrop-blur-sm border-2 border-[#00f2ff]/60 flex items-center justify-center shadow-[0_0_40px_rgba(0,242,255,0.3)] cursor-pointer hover:scale-110 hover:shadow-[0_0_60px_rgba(0,242,255,0.5)] transition-all active:scale-95"
-                    aria-label="Summon Web Witch"
-                  >
-                    <span className="text-3xl">🔔</span>
-                  </button>
+                  {/* Center: Show pulsing orb while loading, bell after loading completes */}
+                  {!loadingComplete ? (
+                    // Pulsing orb during loading
+                    <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-[#00f2ff]/20 to-[#7000ff]/30 backdrop-blur-sm border-2 border-[#00f2ff]/60 flex items-center justify-center shadow-[0_0_40px_rgba(0,242,255,0.3)]">
+                      <div className="w-4 h-4 rounded-full bg-[#00f2ff] animate-pulse shadow-[0_0_20px_rgba(0,242,255,0.8)]" />
+                    </div>
+                  ) : (
+                    // Summon Bell after loading completes
+                    <button
+                      onClick={() => {
+                        console.log("[Web Witch] Summon bell pressed!");
+                        if (vrmViewerRef.current) {
+                          vrmViewerRef.current.setFacingDirection('front');
+                        }
+                        setConnectionPhase('ready');
+                        const fallbackGreeting = "Greetings, traveler! I am Web Witch, mystical guide to Adam's digital realm. What knowledge do you seek?";
+                        setMessages([{ role: 'assistant', content: fallbackGreeting }]);
+                        setStatus("Web Witch is ready!");
+                        speak(fallbackGreeting);
+                        lastInteractionRef.current = Date.now();
+                      }}
+                      className="relative w-24 h-24 rounded-full bg-gradient-to-br from-[#00f2ff]/20 to-[#7000ff]/30 backdrop-blur-sm border-2 border-[#00f2ff]/60 flex items-center justify-center shadow-[0_0_40px_rgba(0,242,255,0.3)] cursor-pointer hover:scale-110 hover:shadow-[0_0_60px_rgba(0,242,255,0.5)] transition-all active:scale-95"
+                      aria-label="Summon Web Witch"
+                    >
+                      <span className="text-3xl">🔔</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* Status Text - Mystical Language */}
@@ -474,9 +470,11 @@ function HomeContent() {
                     {connectionPhase === 'voice-check' && '✧ ATTUNING ESSENCE ✧'}
                   </p>
                   <p className="text-zinc-400 text-xs mt-3 font-light italic max-w-xs">{status}</p>
-                  <p className="text-[#00f2ff]/80 text-xs mt-4 font-semibold animate-bounce">
-                    ↑ Tap the bell to summon me ↑
-                  </p>
+                  {loadingComplete && (
+                    <p className="text-[#00f2ff]/80 text-xs mt-4 font-semibold animate-bounce">
+                      ↑ Tap the bell to summon me ↑
+                    </p>
+                  )}
                 </div>
               </div>
             )}
