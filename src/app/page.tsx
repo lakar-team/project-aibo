@@ -328,7 +328,7 @@ function HomeContent() {
 
             {/* Intergalactic Dialing Overlay */}
             {connectionPhase !== 'ready' && (
-              <div className={`absolute inset-0 flex flex-col items-center justify-center z-20 transition-opacity duration-1000 ${connectionPhase === 'ready' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-20 transition-opacity duration-1000">
                 {/* Pulsing Rings */}
                 <div className="relative flex items-center justify-center">
                   <div className="absolute w-32 h-32 rounded-full border-2 border-[#00f2ff]/30 animate-ping" style={{ animationDuration: '2s' }} />
