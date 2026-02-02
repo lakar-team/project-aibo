@@ -189,6 +189,9 @@ function HomeContent() {
     setIsThinking(true);
     setStatus("Link forged!");
 
+    // Fallback greeting when AI is unavailable
+    const fallbackGreeting = "Greetings, traveler! I am Web Witch, mystical guide to Adam's digital realm. The cosmic energies are a bit unstable right now, but feel free to type your questions or use voice to summon my wisdom!";
+
     // Fetch the real AI greeting
     try {
       const response = await fetch('/api/brain', {
@@ -203,10 +206,21 @@ function HomeContent() {
         setStatus("Web Witch: " + data.reply.substring(0, 40) + "...");
         speak(data.reply);
         lastInteractionRef.current = Date.now();
+      } else {
+        // AI returned no reply - use fallback
+        console.warn("[Web Witch] No AI reply, using fallback greeting");
+        setMessages([{ role: 'assistant', content: fallbackGreeting }]);
+        setStatus("Web Witch is ready!");
+        speak(fallbackGreeting);
+        lastInteractionRef.current = Date.now();
       }
     } catch (err) {
-      console.error("[Web Witch] Greeting fetch failed:", err);
-      setStatus("Ready to assist!");
+      // Network error or 503 - use fallback greeting
+      console.error("[Web Witch] Greeting fetch failed, using fallback:", err);
+      setMessages([{ role: 'assistant', content: fallbackGreeting }]);
+      setStatus("Web Witch is ready!");
+      speak(fallbackGreeting);
+      lastInteractionRef.current = Date.now();
     } finally {
       setIsThinking(false);
     }
