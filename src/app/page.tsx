@@ -104,29 +104,74 @@ function HomeContent() {
   };
 
   // Phase 2: Voice check (warm up TTS)
-  const performVoiceCheck = () => {
+  const performVoiceCheck = async () => {
     setConnectionPhase('voice-check');
-    setStatus("Calibrating voice frequencies...");
+    setStatus("Attuning voice frequencies...");
 
-    const voiceCheckPhrase = "Voice check... one, two.";
+    // Wait for voices to load (they load async in most browsers)
+    const waitForVoices = (): Promise<SpeechSynthesisVoice[]> => {
+      return new Promise((resolve) => {
+        const voices = speechSynthesis.getVoices();
+        if (voices.length > 0) {
+          resolve(voices);
+        } else {
+          speechSynthesis.addEventListener('voiceschanged', () => {
+            resolve(speechSynthesis.getVoices());
+          }, { once: true });
+          // Timeout after 2 seconds
+          setTimeout(() => resolve(speechSynthesis.getVoices()), 2000);
+        }
+      });
+    };
 
-    // Use Web Speech API directly for voice check
     if ('speechSynthesis' in window) {
+      await waitForVoices();
+
+      const voiceCheckPhrase = "Voice check... one, two.";
       const utterance = new SpeechSynthesisUtterance(voiceCheckPhrase);
       utterance.rate = 0.9;
       utterance.pitch = 1.1;
 
+      // Try to find a female voice
+      const voices = speechSynthesis.getVoices();
+      const femaleVoice = voices.find(v =>
+        v.name.includes("Google UK English Female") ||
+        v.name.includes("Samantha") ||
+        v.name.toLowerCase().includes("female")
+      );
+      if (femaleVoice) utterance.voice = femaleVoice;
+
+      let voiceCheckResolved = false;
+
       utterance.onend = () => {
-        console.log("[Web Witch] Voice check complete! Turning around...");
-        completeConnection();
+        if (!voiceCheckResolved) {
+          voiceCheckResolved = true;
+          console.log("[Web Witch] Voice check complete! Turning around...");
+          completeConnection();
+        }
       };
 
-      utterance.onerror = () => {
-        console.warn("[Web Witch] Voice check failed, proceeding anyway...");
-        completeConnection();
+      utterance.onerror = (e) => {
+        if (!voiceCheckResolved) {
+          voiceCheckResolved = true;
+          console.warn("[Web Witch] Voice check error:", e.error);
+          // Still proceed - the greeting will try TTS again
+          completeConnection();
+        }
       };
 
+      // Cancel any pending speech and speak
+      speechSynthesis.cancel();
       speechSynthesis.speak(utterance);
+
+      // Fallback timeout - if TTS is silently blocked, proceed after 3s
+      setTimeout(() => {
+        if (!voiceCheckResolved) {
+          voiceCheckResolved = true;
+          console.warn("[Web Witch] Voice check timed out - TTS may be blocked");
+          completeConnection();
+        }
+      }, 3000);
     } else {
       // TTS not supported, skip voice check
       completeConnection();
@@ -281,8 +326,14 @@ function HomeContent() {
   };
 
   const speak = (text: string) => {
+    console.log("[Web Witch] Speaking:", text.substring(0, 50) + "...");
+
+    // Cancel any pending speech
+    window.speechSynthesis.cancel();
+
     const utterance = new SpeechSynthesisUtterance(text);
     const voices = window.speechSynthesis.getVoices();
+
     // Prioritize specific high-quality female voices, then fallback to any female voice
     const femaleVoice = voices.find(v =>
       v.name.includes("Google UK English Female") ||
@@ -302,6 +353,10 @@ function HomeContent() {
     if (vrmViewerRef.current) {
       vrmViewerRef.current.speakWithLipSync(text);
     }
+
+    utterance.onerror = (e) => {
+      console.error("[Web Witch] TTS Error:", e.error);
+    };
 
     window.speechSynthesis.speak(utterance);
   };
