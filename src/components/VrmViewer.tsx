@@ -12,22 +12,28 @@ interface VrmViewerProps {
 
 export interface VrmViewerHandle {
     speakWithLipSync: (text: string) => void;
+    setFacingDirection: (direction: 'front' | 'back') => void;
 }
 
 const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded, isEmbedded }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const vrmRef = useRef<VRM | null>(null);
     const isSpeakingRef = useRef(false);
+    const targetRotationRef = useRef<number>(Math.PI); // Default: facing front (model is rotated 180°)
 
-    // Expose lip sync function to parent
+    // Expose functions to parent
     useImperativeHandle(ref, () => ({
         speakWithLipSync: (text: string) => {
             isSpeakingRef.current = true;
-            // Estimate speech duration based on text length (~100ms per character)
             const duration = Math.min(text.length * 80, 10000);
             setTimeout(() => {
                 isSpeakingRef.current = false;
             }, duration);
+        },
+        setFacingDirection: (direction: 'front' | 'back') => {
+            // 'front': face camera (rotation.y = Math.PI)
+            // 'back': face away (rotation.y = 0)
+            targetRotationRef.current = direction === 'front' ? Math.PI : 0;
         }
     }));
 
@@ -95,6 +101,15 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded, isEmb
             if (vrmRef.current) {
                 const vrm = vrmRef.current;
                 vrm.update(delta);
+
+                // === SMOOTH ROTATION TO TARGET ===
+                // Lerp the model's Y rotation toward the target (for facing front/back)
+                const currentRotation = vrm.scene.rotation.y;
+                const targetRotation = targetRotationRef.current;
+                const rotationDiff = targetRotation - currentRotation;
+                if (Math.abs(rotationDiff) > 0.01) {
+                    vrm.scene.rotation.y += rotationDiff * 0.05; // Smooth lerp factor
+                }
 
                 // === NATURAL BODY SWAY ===
                 // Gentle swaying motion using sine waves

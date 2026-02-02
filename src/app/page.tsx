@@ -19,11 +19,16 @@ function HomeContent() {
   const isEmbedded = searchParams.get('embed') === 'true';
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  const [status, setStatus] = useState("Ready. Click to talk or type below.");
+  const [status, setStatus] = useState("Establishing connection...");
   const [isListening, setIsListening] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+
+  // Connection phase for intergalactic dialing experience
+  type ConnectionPhase = 'dialing' | 'voice-check' | 'ready' | 'error';
+  const [connectionPhase, setConnectionPhase] = useState<ConnectionPhase>('dialing');
+
   const vrmRef = useRef<VRM | null>(null);
   const vrmViewerRef = useRef<VrmViewerHandle>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -35,46 +40,49 @@ function HomeContent() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // WARM-UP: Trigger welcome message on page load to pre-connect AI and speech
+  // INTERGALACTIC DIALING: Multi-phase connection experience
   useEffect(() => {
-    const warmupTimer = setTimeout(() => {
-      if (messages.length === 0 && !isThinking) {
-        console.log("[Web Witch] Warming up AI connection...");
-        triggerWelcome();
-      }
-    }, 2000); // Wait 2 seconds after page load
+    // Start with avatar facing away
+    if (vrmViewerRef.current) {
+      vrmViewerRef.current.setFacingDirection('back');
+    }
 
-    return () => clearTimeout(warmupTimer);
+    const dialingTimer = setTimeout(() => {
+      if (messages.length === 0 && !isThinking) {
+        console.log("[Web Witch] Initiating interdimensional connection...");
+        initiateConnection();
+      }
+    }, 1500); // Start dialing after 1.5 seconds
+
+    return () => clearTimeout(dialingTimer);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const triggerWelcome = async () => {
-    setIsThinking(true);
-    setStatus("Web Witch is waking up...");
+  // Phase 1: Establish AI connection (silent)
+  const initiateConnection = async () => {
+    setConnectionPhase('dialing');
+    setStatus("Channeling interdimensional frequencies...");
 
-    // Try up to 5 times with increasing delays
+    // Try to connect to AI (silent, no speech yet)
     for (let attempt = 1; attempt <= 5; attempt++) {
       try {
-        console.log(`[Web Witch] Welcome attempt ${attempt}/5...`);
+        console.log(`[Web Witch] Connection attempt ${attempt}/5...`);
         const response = await fetch('/api/brain', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: "Greet the visitor warmly and introduce yourself briefly.", isIdlePrompt: true })
+          body: JSON.stringify({ message: "Respond with ONLY: Ready.", isIdlePrompt: true })
         });
 
         const data = await response.json();
         if (data.reply) {
-          setMessages([{ role: 'assistant', content: data.reply }]);
-          setStatus("Web Witch: " + data.reply.substring(0, 40) + "...");
-          speak(data.reply);
-          setIsThinking(false);
-          lastInteractionRef.current = Date.now();
-          return; // Success!
+          console.log("[Web Witch] AI connected! Starting voice check...");
+          performVoiceCheck();
+          return;
         }
 
-        // If we got an error, wait and retry
         if (data.error) {
           console.warn(`[Web Witch] Attempt ${attempt} failed:`, data.error);
-          await new Promise(r => setTimeout(r, 1000 * attempt)); // Exponential backoff
+          setStatus(`Retry ${attempt}/5...`);
+          await new Promise(r => setTimeout(r, 1000 * attempt));
         }
       } catch (err) {
         console.error(`[Web Witch] Attempt ${attempt} network error:`, err);
@@ -82,9 +90,73 @@ function HomeContent() {
       }
     }
 
-    // All attempts failed - show fallback message
-    setStatus("Web Witch is resting... Type to wake her!");
-    setIsThinking(false);
+    // All attempts failed
+    setConnectionPhase('error');
+    setStatus("Connection unstable... Type to establish link.");
+  };
+
+  // Phase 2: Voice check (warm up TTS)
+  const performVoiceCheck = () => {
+    setConnectionPhase('voice-check');
+    setStatus("Calibrating voice frequencies...");
+
+    const voiceCheckPhrase = "Voice check... one, two.";
+
+    // Use Web Speech API directly for voice check
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(voiceCheckPhrase);
+      utterance.rate = 0.9;
+      utterance.pitch = 1.1;
+
+      utterance.onend = () => {
+        console.log("[Web Witch] Voice check complete! Turning around...");
+        completeConnection();
+      };
+
+      utterance.onerror = () => {
+        console.warn("[Web Witch] Voice check failed, proceeding anyway...");
+        completeConnection();
+      };
+
+      speechSynthesis.speak(utterance);
+    } else {
+      // TTS not supported, skip voice check
+      completeConnection();
+    }
+  };
+
+  // Phase 3: Complete connection (avatar turns, real greeting)
+  const completeConnection = async () => {
+    // Rotate avatar to face camera
+    if (vrmViewerRef.current) {
+      vrmViewerRef.current.setFacingDirection('front');
+    }
+
+    setConnectionPhase('ready');
+    setIsThinking(true);
+    setStatus("Connection established!");
+
+    // Fetch the real AI greeting
+    try {
+      const response = await fetch('/api/brain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: "Greet the visitor warmly. Introduce yourself as Web Witch and offer to help them explore Adam's portfolio.", isIdlePrompt: true })
+      });
+
+      const data = await response.json();
+      if (data.reply) {
+        setMessages([{ role: 'assistant', content: data.reply }]);
+        setStatus("Web Witch: " + data.reply.substring(0, 40) + "...");
+        speak(data.reply);
+        lastInteractionRef.current = Date.now();
+      }
+    } catch (err) {
+      console.error("[Web Witch] Greeting fetch failed:", err);
+      setStatus("Ready to assist!");
+    } finally {
+      setIsThinking(false);
+    }
   };
 
   // Idle conversation timer (2.5 minutes = 150000ms)
@@ -253,6 +325,33 @@ function HomeContent() {
           <div className="relative h-full w-full">
             <VrmViewer ref={vrmViewerRef} isEmbedded={isEmbedded} onLoaded={(vrm) => { vrmRef.current = vrm; }} />
             <div className={`absolute inset-0 pointer-events-none ${isEmbedded ? 'bg-gradient-to-b from-black/30 via-transparent to-black/60' : 'bg-gradient-to-t from-[#050505] via-transparent to-transparent'}`} />
+
+            {/* Intergalactic Dialing Overlay */}
+            {connectionPhase !== 'ready' && (
+              <div className={`absolute inset-0 flex flex-col items-center justify-center z-20 transition-opacity duration-1000 ${connectionPhase === 'ready' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                {/* Pulsing Rings */}
+                <div className="relative flex items-center justify-center">
+                  <div className="absolute w-32 h-32 rounded-full border-2 border-[#00f2ff]/30 animate-ping" style={{ animationDuration: '2s' }} />
+                  <div className="absolute w-48 h-48 rounded-full border border-[#7000ff]/20 animate-ping" style={{ animationDuration: '3s' }} />
+                  <div className="absolute w-64 h-64 rounded-full border border-[#00f2ff]/10 animate-ping" style={{ animationDuration: '4s' }} />
+
+                  {/* Center Glyph */}
+                  <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-[#00f2ff]/20 to-[#7000ff]/20 backdrop-blur-sm border border-[#00f2ff]/50 flex items-center justify-center">
+                    <div className="w-3 h-3 rounded-full bg-[#00f2ff] animate-pulse" />
+                  </div>
+                </div>
+
+                {/* Status Text */}
+                <div className="mt-12 text-center">
+                  <p className="text-[#00f2ff] text-sm font-mono tracking-wider animate-pulse">
+                    {connectionPhase === 'dialing' && 'ESTABLISHING LINK...'}
+                    {connectionPhase === 'voice-check' && 'CALIBRATING FREQUENCIES...'}
+                    {connectionPhase === 'error' && 'CONNECTION UNSTABLE'}
+                  </p>
+                  <p className="text-zinc-500 text-xs mt-2 font-mono">{status}</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Voice Button Overlay */}
