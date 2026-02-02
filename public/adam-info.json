@@ -1,24 +1,116 @@
 {
-    "name": "Adam M. Raman",
+    "name": "Adam Bin M Raman",
     "title": "Product Strategy Lead | Built Environment & PropTech Innovation",
-    "tagline": "Ex-Founder & R&D Specialist driving Digital Transformation",
-    "location": "Sendai, Japan (Open to Relocation / Hybrid in Tokyo)",
-    "bio": "Ex-Founder and PhD Researcher with 10+ years of project leadership at the intersection of Architecture, Climate Tech, and Digital Transformation. Expert in AI-Assisted Workflows and Process Automation, bridging the gap between complex engineering hardware and agile business strategy. Proven track record of scaling companies to profitability and leading high-impact R&D.",
+    "tagline": "Innovation Strategist | Ex-Founder | Climate Tech Researcher",
+    "location": "Sendai, Japan (Open to Relocation / Hybrid / Remote)",
+    "contact": {
+        "email": "adam.m.raman@gmail.com",
+        "mobile": "+8190 3296 5044"
+    },
+    "bio": "Innovation strategist and former Founder with 10+ years of experience bridging the gap between physical infrastructure and digital solutions. Successfully bootstrapped a design-build firm to profitability (100% YoY growth) before pivoting to a Research Sabbatical in Climate Tech. Expert in Human-Centric Design, applying deep user empathy to make complex technical systems (Spaces, Energy, Software) intuitive for humans. Currently leveraging AI-assisted workflows to drive digital transformation and sustainable innovation.",
     "skills": [
-        "Product Lifecycle Management",
-        "Agile Methodologies",
-        "Stakeholder Management",
-        "Go-to-Market Strategy",
-        "P&L Ownership",
-        "IoT & Smart Home Integration",
-        "Energy Data Analysis",
-        "AI-Assisted Workflow Design",
-        "Process Automation",
-        "BIM (Building Information Modeling)",
-        "Sustainable HVAC",
-        "Technical Documentation",
-        "Music Education",
-        "Digital Art & Illustration"
+        "Human-Centric Design (HCD)",
+        "Design Thinking",
+        "UX in Physical & Digital Spaces",
+        "Business Development",
+        "Product-Market Fit",
+        "P&L Management",
+        "Climate Tech & PropTech",
+        "IoT Systems & Smart Homes",
+        "Process Automation (Python/Electron)",
+        "Cross-Border Operations"
+    ],
+    "experience": [
+        {
+            "company": "Refil, Japan",
+            "role": "Building Energy Consultant & Process Automation",
+            "duration": "2025 – 2026",
+            "focus": "Energy Systems Design & Process Automation",
+            "highlights": [
+                "Conducting comprehensive energy audits and designing M&E system proposals for new builds.",
+                "Developed internal automation tools and custom apps to parse Japanese Industrial Standards (JIS).",
+                "Streamlined regulatory compliance ensuring consistent deliverables across complex projects."
+            ]
+        },
+        {
+            "company": "Lakar Design, Malaysia",
+            "role": "Founder, Managing Director & Design Lead",
+            "duration": "2012 – 2022",
+            "focus": "Market Disruption, Human-Centric Business, Operational Scale",
+            "highlights": [
+                "Pioneered 'affordable designer renovation' model, shifting local industry standards.",
+                "Scaled company to profitability with 100% YoY revenue growth for 8 consecutive years.",
+                "Directed 40+ capital projects (Residential, Commercial, Smart Homes) with full P&L responsibility.",
+                "Partnered with suppliers to implement innovative construction tech (lightweight structures, IoT)."
+            ]
+        },
+        {
+            "company": "MARA University of Technology (UiTM)",
+            "role": "Assistant Lecturer & Facilitator",
+            "duration": "2016 – 2019",
+            "highlights": [
+                "Designed and delivered 'Design Thinking' and 'Human Sensibility' modules.",
+                "Mentored 200+ students in integrating construction technology and human-centric methodologies."
+            ]
+        },
+        {
+            "company": "S&A Architects, Malaysia",
+            "role": "Assistant Architect",
+            "duration": "2009 – 2011",
+            "highlights": [
+                "Lead Designer on PAM Award 2017 winning project (Multiple Residential Low-Rise).",
+                "Revived a 17-storey abandoned housing project, scaling role from interior designer to lead architect."
+            ]
+        }
+    ],
+    "education": [
+        {
+            "degree": "PhD Sabbatical (Climate Tech R&D)",
+            "institution": "Tohoku University, Japan",
+            "year": "2025",
+            "details": "Thesis: Solar-regenerated passive dehumidification hardware (50% cooling load reduction)."
+        },
+        {
+            "degree": "Master of Architecture (Part 2)",
+            "institution": "University of Manchester, UK",
+            "year": "2011",
+            "details": "Dissertation: Barriers to Energy Efficiency in Existing Housing Stock."
+        },
+        {
+            "degree": "Bachelor of Science in Architecture (Part 1)",
+            "institution": "UiTM, Malaysia",
+            "year": "2008"
+        }
+    ],
+    "languages": [
+        "English (C2)",
+        "Malay (C2)",
+        "Japanese (JLPT N3-N2 equivalent)"
+    ],
+    "certifications": [
+        "IELTS Band 8.0 (2021)",
+        "RIBA Architect Accredited",
+        "LAM Accredited"
+    ],
+    "other_experience": [
+        {
+            "role": "Cultural Educator",
+            "organization": "MIA/SenTIA, Sendai",
+            "duration": "2023 – Present",
+            "details": "Conducts cultural workshops introducing Malaysian culture to Japanese schools and Architects."
+        },
+        {
+            "role": "International Sourcing Specialist",
+            "organization": "Awatar Ltd, UK",
+            "duration": "2023 – Present",
+            "details": "Sourcing and global logistics for vinyl records (USA, UK, France)."
+        },
+        {
+            "role": "Concert Organizer",
+            "organization": "KNUKE, Manchester",
+            "duration": "2010",
+            "details": "Organized concert tours for Malaysian bands in the UK."
+        }
     ],
     "portfolio_sitemap": {
         "guide_instructions": "The portfolio is a 3D Solar System. Users navigate by clicking planets or using the 'Navigate' menu. The 'Sun' is the Core Profile (CV).",
@@ -154,155 +246,5 @@
             ],
             "focus": "Transition from 'Rumah Bujang' (stilted, breathable) to modern high-density terrace housing and the loss of passive cooling features."
         }
-    },
-    "experience": [
-        {
-            "company": "Refil, Japan",
-            "role": "Product & Innovation Consultant",
-            "duration": "2025 – Present",
-            "focus": "Digital Transformation & Operational Efficiency",
-            "highlights": [
-                "Architected end-to-end automated workflows for energy audits, reducing cycle times by 40%",
-                "Implemented AI agent-assisted research for market due diligence",
-                "Bridged physical engineering assets and business objectives through data-driven modeling"
-            ]
-        },
-        {
-            "company": "Tohoku University, Japan",
-            "role": "Climate Tech Researcher (PhD)",
-            "duration": "2022 – 2025",
-            "focus": "R&D Leadership & Climate Hardware",
-            "highlights": [
-                "Paper: 'Solar Regenerated Daily Cycle Passive Dehumidifying Air-Conditioner'",
-                "Achieved 40% night-time humidity reduction using solar-regenerated charcoal",
-                "Synthesized large-scale environmental datasets from Japan and SE Asia"
-            ]
-        },
-        {
-            "company": "Lakar Design, Malaysia",
-            "role": "Founder & CEO",
-            "duration": "2012 – 2022",
-            "focus": "Growth, Disruption, and UX in Physical Spaces",
-            "highlights": [
-                "Founded Lakar Design Studio (2012), expanded to Lakar Construction (2015), then Lakar Sdn Bhd (2021)",
-                "Won PAM Silver Award 2017 for 'Thistle Groove'",
-                "Executed diverse projects: F&B outlets, Retail, Bungalows, MRT Stations",
-                "Pioneered smart home integration by offering free upgrades for data"
-            ]
-        },
-        {
-            "company": "S&A Architects, Malaysia",
-            "role": "Lead Architect",
-            "duration": "Prior to Lakar",
-            "highlights": [
-                "Led architectural design and project delivery in Shah Alam",
-                "Key contributor to award-winning residential projects"
-            ]
-        },
-        {
-            "company": "Music Education",
-            "role": "Music Teacher",
-            "duration": "Past Experience",
-            "highlights": [
-                "Passionate about music theory and performance"
-            ]
-        }
-    ],
-    "education": [
-        {
-            "degree": "PhD in Climate Technology & Thermal Dynamics",
-            "institution": "Tohoku University, Japan",
-            "year": "2025",
-            "focus": "Solar-Regenerated Passive Cooling Systems"
-        },
-        {
-            "degree": "Master of Architecture (Part 2)",
-            "institution": "University (UK)",
-            "year": "2012"
-        },
-        {
-            "degree": "Bachelor of Architecture (Part 1)",
-            "institution": "University (UK)",
-            "year": "2009"
-        }
-    ],
-    "projects": {
-        "work": [
-            {
-                "name": "Refil Japan",
-                "description": "Product & Innovation Consultant driving digital transformation"
-            },
-            {
-                "name": "Power Lunch",
-                "description": "Dynamic host listing system for professional meetups",
-                "link": "https://power-lunch.pages.dev/"
-            },
-            {
-                "name": "Project Aibo",
-                "description": "AI-driven robotic companion",
-                "link": "https://project-aibo.vercel.app/"
-            }
-        ],
-        "research": [
-            {
-                "name": "PhD: Solar Dehumidifier",
-                "description": "Solar-regenerated charcoal system achieving 40% humidity reduction"
-            },
-            {
-                "name": "Malaysian Housing History",
-                "description": "Research on the evolution from traditional stilted houses to modern terrace housing"
-            }
-        ],
-        "hobby": [
-            {
-                "name": "Kanji Sniper",
-                "description": "OCR-based Japanese learning game"
-            },
-            {
-                "name": "Demon Hunter",
-                "description": "Web Audio API action game"
-            },
-            {
-                "name": "Momotaro Kids Book",
-                "description": "Bilingual Japanese-English children's book",
-                "link": "https://www.amazon.com/dp/B0GCV34Z4S"
-            },
-            {
-                "name": "The Kite Maker",
-                "description": "Illustrated book project (2021 WAU)",
-                "link": "#"
-            },
-            {
-                "name": "Nature Vibe YouTube",
-                "description": "YouTube channel with serene nature vibes",
-                "link": "https://www.youtube.com/@naturevibechannel"
-            },
-            {
-                "name": "Smart Home Lab",
-                "description": "Real-world experiments (Bukit Jalil, Menjalara) testing Zigbee & Google Home"
-            }
-        ],
-        "merch": [
-            {
-                "name": "Redbubble Shop",
-                "description": "Custom apparel from Stellar to Climate Tech collections",
-                "link": "https://www.redbubble.com/people/lakardesign/shop"
-            }
-        ]
-    },
-    "links": {
-        "portfolio": "https://solar-punk-five.vercel.app",
-        "github": "https://github.com/lakar-team",
-        "shop": "https://www.redbubble.com/people/lakardesign/shop",
-        "youtube": "https://www.youtube.com/@naturevibechannel",
-        "amazon_book": "https://www.amazon.com/dp/B0GCV34Z4S"
-    },
-    "fun_facts": [
-        "Won PAM Silver Award 2017 for 'Thistle Groove'",
-        "Received IID 2006 Silver Award",
-        "Started Smart Home experiments in 2014 inspired by Tesla",
-        "Offered free smart home upgrades to clients to gather R&D data",
-        "Wrote 'The Kite Maker' and 'Momotaro' bilingual books",
-        "Has experience as a Music Teacher"
-    ]
+    }
 }
