@@ -60,10 +60,6 @@ function HomeContent() {
   const handleVrmLoaded = (vrm: any) => {
     vrmRef.current = vrm;
     vrmLoadedRef.current = true;
-    // Start facing away if we're still in dialing phase
-    if (connectionPhase !== 'ready' && vrmViewerRef.current) {
-      vrmViewerRef.current.setFacingDirection('back');
-    }
   };
 
   // Phase 1: Establish AI connection (silent)
@@ -182,11 +178,6 @@ function HomeContent() {
 
   // Phase 3: Complete connection (avatar turns, real greeting)
   const completeConnection = async () => {
-    // Rotate avatar to face camera
-    if (vrmViewerRef.current) {
-      vrmViewerRef.current.setFacingDirection('front');
-    }
-
     setConnectionPhase('ready');
     setIsThinking(true);
     setStatus("Link forged!");
@@ -445,9 +436,6 @@ function HomeContent() {
                     <button
                       onClick={() => {
                         console.log("[Web Witch] Summon bell pressed!");
-                        if (vrmViewerRef.current) {
-                          vrmViewerRef.current.setFacingDirection('front');
-                        }
                         setConnectionPhase('ready');
                         const fallbackGreeting = "Greetings, traveler! I am Web Witch, mystical guide to Adam's digital realm. What knowledge do you seek?";
                         setMessages([{ role: 'assistant', content: fallbackGreeting }]);
