@@ -219,48 +219,7 @@ function HomeContent() {
     }
   };
 
-  // Idle conversation timer (2.5 minutes = 150000ms)
-  useEffect(() => {
-    const IDLE_TIMEOUT = 150000; // 2.5 minutes
-
-    const checkIdle = () => {
-      const timeSinceLastInteraction = Date.now() - lastInteractionRef.current;
-      if (timeSinceLastInteraction >= IDLE_TIMEOUT && !isThinking) {
-        triggerIdleConversation();
-      }
-    };
-
-    idleTimerRef.current = setInterval(checkIdle, 30000); // Check every 30 seconds
-
-    return () => {
-      if (idleTimerRef.current) clearInterval(idleTimerRef.current);
-    };
-  }, [isThinking]);
-
-  const triggerIdleConversation = async () => {
-    lastInteractionRef.current = Date.now(); // Reset timer
-    setIsThinking(true);
-    setStatus("Web Witch is thinking...");
-
-    try {
-      const response = await fetch('/api/brain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: "Start a conversation about your master Adam.", isIdlePrompt: true })
-      });
-
-      const data = await response.json();
-      if (data.reply) {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
-        setStatus("Web Witch: " + data.reply.substring(0, 40) + "...");
-        speak(data.reply);
-      }
-    } catch (err) {
-      console.error("Idle conversation error:", err);
-    } finally {
-      setIsThinking(false);
-    }
-  };
+  // Idle auto-chat disabled — Web Witch only responds when prompted.
 
   const sendMessage = async (text: string, isIdle = false) => {
     if (!text.trim()) return;
