@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🤖 PROJECT AIBO: GENERATIVE AI AVATAR
 
-## Getting Started
+![Version](https://img.shields.io/badge/Version-2.1.0--ALPHA-cyan)
+![Engine](https://img.shields.io/badge/Engine-Next.js_16%2B-black)
+![3D](https://img.shields.io/badge/3D-Three.js_%2F_VRM-blue)
 
-First, run the development server:
+**Project AIBO** is a high-fidelity, interactive AI avatar interface. Built with **React 19** and **Three.js**, it brings 3D characters to life using the VRM standard, powered by advanced generative brain models.
 
+## ✨ Core Systems
+
+- 🧠 **Dynamic Brain**: Integrated with **OpenRouter API** (and local Ollama support) for sophisticated, context-aware conversations.
+- 💃 **Motion Engine**: Full support for **@pixiv/three-vrm**, enabling realistic body language, facial expressions, and procedural animations.
+- 🎭 **Emotion Framework**: A state-based mood system that translates AI intent into visual character states (Happy, Sad, Surprised, Neutral).
+- 🎙️ **Neural Voice**: TTS integration via **Edge-TTS**, providing natural-sounding communication with adjustable pitch and rate.
+
+## 🚀 Technical Stack
+
+- **Frontend**: Next.js 16 (Alpha) / React 19 / TypeScript
+- **3D Graphics**: Three.js / @react-three/fiber
+- **Avatar Format**: VRM (@pixiv/three-vrm)
+- **AI Integration**: OpenRouter SDK / Ollama
+
+## 🛠️ Setup & Ignition
+
+### 1. Installation
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Environment Configuration
+Create a `.env` file based on `.env.example`:
+```env
+OPENROUTER_API_KEY=your_key_here
+NEXT_PUBLIC_AVATAR_URL=/models/aibo.vrm
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Start the Engine
+```bash
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 📦 Architecture
 
-## Learn More
+- `/src/components/canvas`: The Three.js rendering layer.
+- `/src/lib/brain`: Logic for persona management and LLM integration.
+- `/src/hooks`: Custom hooks for VRM expression and pose control.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+&copy; 2026 Lakar Lab / Advanced Agency Framework
