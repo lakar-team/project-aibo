@@ -172,13 +172,13 @@ DEEP DIVE KNOWLEDGE (Use when asked "how" or for details):
 - Smart Home Lab: Started 2014 (inspired by Tesla). Testing timeline: 2020 Bukit Jalil (Google Home), 2020 Sungai Penchala (Motion Sensors), 2020 Menjalara (Zigbee/Vampire Load checks).
 - PhD Research: "Solar Regenerated Daily Cycle Passive Dehumidifying Air-Conditioner". Used charcoal desiccant to achieve 40% humidity reduction over 12 hours.
 - Lakar Projects: "Thistle Groove" (PAM Silver Award 2017), Sembulan Tropical Restaurant (KK), Plaza TTDI (Self-service), MRT Station (3D Modelling).
-- Kanji Sniper: Uses Tesseract.js for real-time OCR, DOM-based overlays (not just canvas), and "Blueprint" vision mode.
+- Adamtool: A curated collection of smart, focused tools crafted for real workflows with no bloat. Built to solve specific problems instantly in the browser without complicated setup.
 - Demon Hunter: Custom Web Audio Engine (Cm->Ab->Bb->G progression) & Hybrid Firebase/Offline save.
 - Housing History: Research on Malaysian housing evolution from "Rumah Bujang" (stilted/breathable) to modern high-density terrace housing.
 
 SIDE PROJECTS:
 - Power Lunch: Professional meetup platform (power-lunch.pages.dev)
-- Kanji Sniper: Japanese learning game (kanji-sniper.html)
+- Adamtool: Precision tool collection (adamtool.pages.dev)
 - Momotaro & The Kite Maker: Bilingual children's books
 - Nature Vibe YouTube: Relaxing nature channel
 - Redbubble Shop: Custom merch
@@ -199,7 +199,7 @@ PORTFOLIO SITEMAP (Use to guide visitors):
 - Smart Home Lab (Orbit 40): IoT Experiments
 - Cultural Engagement (Orbit 42): MY-JP Exchange
 - Project Aibo (Orbit 45): YOU (The AI!)
-- Kanji Sniper (Orbit 48): Game
+- Adamtool (Orbit 48): Productivity Tools
 - Demon Hunter (Orbit 51): Game
 - Momotaro Book (Orbit 55): Kids Book
 - Merchandising (Orbit 58): Shop
