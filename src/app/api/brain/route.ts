@@ -1,6 +1,36 @@
 import { NextResponse } from 'next/server';
+import { checkRateLimit } from '@/lib/ratelimit';
 
 export const runtime = 'edge';
+
+// ============================================================
+// REQUEST GATING: origin allowlist + per-IP rate limit
+// ============================================================
+
+const ALLOWED_ORIGINS = [
+    'https://project-aibo.vercel.app',
+    'https://solar-punk-five.vercel.app',
+];
+
+function isAllowedOrigin(req: Request): boolean {
+    const raw = req.headers.get('origin') ?? req.headers.get('referer');
+    if (!raw) return false;
+    try {
+        const { origin, hostname } = new URL(raw);
+        if (ALLOWED_ORIGINS.includes(origin)) return true;
+        return hostname === 'localhost' || hostname === '127.0.0.1';
+    } catch {
+        return false;
+    }
+}
+
+function clientIp(req: Request): string {
+    return (
+        req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+        req.headers.get('x-real-ip') ||
+        'unknown'
+    );
+}
 
 // ============================================================
 // MULTI-PROVIDER AI FALLBACK SYSTEM
@@ -142,6 +172,18 @@ async function tryOpenRouter(messages: any[]): Promise<ProviderResult> {
 
 // Main handler
 export async function POST(req: Request) {
+    if (!isAllowedOrigin(req)) {
+        return NextResponse.json({ error: 'Forbidden origin.' }, { status: 403 });
+    }
+
+    const { success: withinLimit } = await checkRateLimit(clientIp(req));
+    if (!withinLimit) {
+        return NextResponse.json(
+            { error: 'Too many requests — the witch needs a moment to catch her breath. Try again in a minute.' },
+            { status: 429 }
+        );
+    }
+
     try {
         const { message, isIdlePrompt } = await req.json();
 
