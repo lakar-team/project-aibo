@@ -18,20 +18,25 @@ file before ending every session.
 | AIBO_Alive | not deployed (localhost Flask + Ollama; default branch `master`) | Python Flask, SQLAlchemy, edge-tts, Ollama qwen2.5:3b + llava-phi3 |
 
 - AIBO_Alive is Flask → **cannot** deploy to Vercel. It is a feature donor, not the deploy target.
-- The Drive folder `G:\My Drive\AI Platforms\AIBO_Alive\` contains **only** CLAUDE.md, this PLAN.md,
-  and the character assets (`Web Witch.vrm`, `Web Witch.vroid`, `Miku Liv.vrm`, `miku liv.vroid`).
-  **All code lives on GitHub only.** The old "Project AIBO" folder's assets were merged here.
-- WebWitch.vrm copies: `G:\My Drive\AI Platforms\AIBO_Alive\Web Witch.vrm` (canonical),
-  `project-aibo/public/avatar.vrm` (deployed one, 17 MB in git), `AIBO_Alive/Static/avatar.vrm`.
+- **Canonical code location (since 2026-07-04):** `G:\My Drive\AI Platforms\project-aibo\` — a full
+  git clone of the repo on `main`. Edit here, commit here, push from here. This PLAN.md lives at
+  its root. The old `AIBO_Alive\` Drive folder is retired (its CLAUDE.md is just a pointer);
+  the old "Project AIBO" folder's assets were merged in along the way.
+- WebWitch.vrm copies: `project-aibo\public\avatars\Web Witch.vrm` (canonical, gitignored,
+  Drive-only; Miku Liv + both .vroid sources sit beside it), `project-aibo/public/avatar.vrm`
+  (deployed one, 17 MB in git), `AIBO_Alive/Static/avatar.vrm` (retired repo).
 
 ### CRITICAL workflow rules (from repo + Drive conventions)
 
 1. **NEVER run `npm install`/`npm run build` on Google Drive paths** — corrupts node_modules.
-   Clone to a local path instead: `git clone https://github.com/lakar-team/project-aibo.git C:\projects\project-aibo`
-   (repo's own GOOGLE_DRIVE_NOTICE.md says the same).
-2. Deploy = push to GitHub `main`; Vercel auto-deploys. Env vars are set in the Vercel dashboard.
+   Use `.\build.ps1` in the project root instead: it mirrors source to
+   `%LOCALAPPDATA%\project-aibo-build` and runs all npm work there (`-Dev` for the dev server,
+   `-Install` to force reinstall). Never invoke npm directly in the Drive folder.
+2. Deploy = push to GitHub `main` (github.com/lakar-team/project-aibo); Vercel auto-deploys to
+   https://project-aibo.vercel.app. The local build.ps1 build is verification only — nothing is
+   uploaded from it. Env vars are set in the Vercel dashboard.
 3. Wiki rule: after each non-trivial phase, update `G:\My Drive\AI Platforms\Wiki\vault\drive-map\project-aibo.md`
-   and the wiki-chain block in `G:\My Drive\AI Platforms\AIBO_Alive\CLAUDE.md`.
+   and the wiki-chain block in `G:\My Drive\AI Platforms\project-aibo\CLAUDE.md`.
 4. Existing env vars on Vercel: `OPENROUTER_API_KEY`, `GOOGLE_GEMINI_API_KEY`. New ones each
    phase needs are listed per phase; Adam must add them in the Vercel dashboard (ask him).
 
@@ -104,16 +109,17 @@ already renders WebWitch.vrm, already Next.js. No new repo, no framework migrati
 
 ## C. Phased implementation plan
 
-Rules for every phase: work in a **local clone** (`C:\projects\project-aibo`), never on Drive;
-commit per checkbox; run `npm run build` locally before pushing; push to `main` deploys;
-verify on https://project-aibo.vercel.app; then update the STATE block in this file
-(on Drive) and the wiki.
+Rules for every phase: work in the canonical Drive folder
+(`G:\My Drive\AI Platforms\project-aibo\`), but **never run npm there** — build and run the dev
+server via `.\build.ps1` (mirrors to `%LOCALAPPDATA%\project-aibo-build`); commit per checkbox;
+run `.\build.ps1` (verifies `next build` in the mirror) before pushing; push to `main` deploys;
+verify on https://project-aibo.vercel.app; then update the STATE block in this file and the wiki.
 
 ### Phase 0 — Hygiene, security, baseline
 **Goal:** safe, rate-limited baseline deploy with no data leaks.
 **Files:** `public/adam-info.json` (edit/remove), `src/app/api/brain/route.ts`, new `src/lib/ratelimit.ts`, `.env.example` (new), `README.md`.
 **Do:**
-- [ ] Clone repo locally; `npm install`; `npm run dev`; confirm avatar loads and chat works (needs the two existing env keys in `.env.local` — ask Adam to paste them).
+- [ ] From `G:\My Drive\AI Platforms\project-aibo\`, run `.\build.ps1 -Dev` (installs deps in the mirror and starts the dev server); confirm avatar loads and chat works (needs the two existing env keys in the mirror's `.env.local` at `%LOCALAPPDATA%\project-aibo-build` — ask Adam to paste them).
 - [ ] Remove the phone number line from `public/adam-info.json` (and from the system prompt in `route.ts` — replace with "contact via email").
 - [ ] `npm i @upstash/redis @upstash/ratelimit`; create `src/lib/ratelimit.ts` (sliding window, 20 req/min per IP). Apply in `route.ts` before provider calls. If `KV_REST_API_URL` is unset, no-op (so local dev works) — ask Adam to create the Upstash KV integration in Vercel dashboard.
 - [ ] Add origin check: reject POSTs whose `Origin`/`Referer` is not `project-aibo.vercel.app`, `solar-punk-five.vercel.app`, or localhost.
@@ -216,8 +222,8 @@ verify on https://project-aibo.vercel.app; then update the STATE block in this f
 
 ## D. Session handoff note (paste this to resume)
 
-> **Project:** upgrade github.com/lakar-team/project-aibo (Next.js 16, deploys to project-aibo.vercel.app, WebWitch VRM avatar) into a full AI companion. The complete locked plan is `G:\My Drive\AI Platforms\AIBO_Alive\PLAN.md` — read it first; all decisions are made there.
-> **Key facts:** AIBO_Alive (Flask) and Kip (`G:\My Drive\AI Platforms\Kip\Kip\`) are feature donors only, not deploy targets. solar-punk (`G:\My Drive\AI Platforms\solar-punk\`) has the better brain route + Kokoro TTS worker to copy from. Code must be cloned to `C:\projects\project-aibo` — NEVER npm on Google Drive. Vercel auto-deploys `main`. Existing envs: OPENROUTER_API_KEY, GOOGLE_GEMINI_API_KEY. New envs come per phase (Upstash KV, GROQ_API_KEY, OWNER_KEY, CRON_SECRET) — Adam adds them in the Vercel dashboard.
+> **Project:** upgrade github.com/lakar-team/project-aibo (Next.js 16, deploys to project-aibo.vercel.app, WebWitch VRM avatar) into a full AI companion. The complete locked plan is `G:\My Drive\AI Platforms\project-aibo\PLAN.md` — read it first; all decisions are made there.
+> **Key facts:** AIBO_Alive (Flask) and Kip (`G:\My Drive\AI Platforms\Kip\Kip\`) are feature donors only, not deploy targets. solar-punk (`G:\My Drive\AI Platforms\solar-punk\`) has the better brain route + Kokoro TTS worker to copy from. Code lives in the canonical Drive clone `G:\My Drive\AI Platforms\project-aibo\` — NEVER npm on Google Drive; build/dev via `.\build.ps1` (mirrors to `%LOCALAPPDATA%\project-aibo-build`), then push to `main` and Vercel auto-deploys. Existing envs: OPENROUTER_API_KEY, GOOGLE_GEMINI_API_KEY. New envs come per phase (Upstash KV, GROQ_API_KEY, OWNER_KEY, CRON_SECRET) — Adam adds them in the Vercel dashboard.
 > **Order:** Phase 0 (security/rate-limit) → 1 (streaming brain + personality + structured {reply,emotion,gesture,lang,memorable}) → 2 (Kip-style model router + budget) → 3 (Kokoro TTS) → 4 (Groq Whisper STT) → 5 (emotions/gestures/idle) → 6 (consent-gated webcam vision) → 7 (sleeping memory in Upstash) → 8 (polish).
 > **Start at:** the first unchecked box in the STATE block below. Update STATE + the wiki (`vault/drive-map/project-aibo.md`) before ending your session.
 
@@ -226,6 +232,6 @@ verify on https://project-aibo.vercel.app; then update the STATE block in this f
 ## STATE — update before ending every session
 
 **Current phase:** none started → next is **Phase 0**
-**Last session:** 2026-07-04, Claude Fable 5 — survey of all five projects + this plan. No code written yet.
-**Blockers:** none known. Phase 0 needs Adam to paste the two existing API keys into `.env.local` of the local clone, and to add the Upstash KV integration in the Vercel dashboard when asked.
-**Decisions since plan:** (record any deviations here)
+**Last session:** 2026-07-04, Claude Fable 5 — Drive consolidation: canonical clone created at `G:\My Drive\AI Platforms\project-aibo\`, build.ps1 + CLAUDE.md added, AIBO_Alive retired, this file moved here. No feature code written yet.
+**Blockers:** none known. Phase 0 needs Adam to paste the two existing API keys into `.env.local` of the build mirror (`%LOCALAPPDATA%\project-aibo-build`), and to add the Upstash KV integration in the Vercel dashboard when asked.
+**Decisions since plan:** 2026-07-04 — workflow changed from "local clone at C:\projects" to canonical Drive clone + build.ps1 mirror (see § 0 CRITICAL rules). This PLAN.md's canonical copy now lives at the project-aibo repo root (committed to git); the AIBO_Alive copy is stale.
