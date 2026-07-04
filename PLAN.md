@@ -119,11 +119,11 @@ verify on https://project-aibo.vercel.app; then update the STATE block in this f
 **Goal:** safe, rate-limited baseline deploy with no data leaks.
 **Files:** `public/adam-info.json` (edit/remove), `src/app/api/brain/route.ts`, new `src/lib/ratelimit.ts`, `.env.example` (new), `README.md`.
 **Do:**
-- [ ] From `G:\My Drive\AI Platforms\project-aibo\`, run `.\build.ps1 -Dev` (installs deps in the mirror and starts the dev server); confirm avatar loads and chat works (needs the two existing env keys in the mirror's `.env.local` at `%LOCALAPPDATA%\project-aibo-build` — ask Adam to paste them).
-- [ ] Remove the phone number line from `public/adam-info.json` (and from the system prompt in `route.ts` — replace with "contact via email").
-- [ ] `npm i @upstash/redis @upstash/ratelimit`; create `src/lib/ratelimit.ts` (sliding window, 20 req/min per IP). Apply in `route.ts` before provider calls. If `KV_REST_API_URL` is unset, no-op (so local dev works) — ask Adam to create the Upstash KV integration in Vercel dashboard.
-- [ ] Add origin check: reject POSTs whose `Origin`/`Referer` is not `project-aibo.vercel.app`, `solar-punk-five.vercel.app`, or localhost.
-- [ ] Write `.env.example` documenting every env var this plan introduces.
+- [x] From `G:\My Drive\AI Platforms\project-aibo\`, run `.\build.ps1 -Dev` (installs deps in the mirror and starts the dev server); confirm avatar loads and chat works (needs the two existing env keys in the mirror's `.env.local` at `%LOCALAPPDATA%\project-aibo-build` — ask Adam to paste them). *(2026-07-05: verified via `npm start` prod server in the mirror instead — homepage + avatar.vrm serve fine; local chat untestable, no `.env.local` keys; chat verified on the live deploy. Note: `next dev` Turbopack panics under Claude's sandboxed shell due to LOCALAPPDATA path virtualization — works from a normal terminal.)*
+- [x] Remove the phone number line from `public/adam-info.json` (and from the system prompt in `route.ts` — replace with "contact via email").
+- [x] `npm i @upstash/redis @upstash/ratelimit`; create `src/lib/ratelimit.ts` (sliding window, 20 req/min per IP). Apply in `route.ts` before provider calls. If `KV_REST_API_URL` is unset, no-op (so local dev works) — ask Adam to create the Upstash KV integration in Vercel dashboard.
+- [x] Add origin check: reject POSTs whose `Origin`/`Referer` is not `project-aibo.vercel.app`, `solar-punk-five.vercel.app`, or localhost.
+- [x] Write `.env.example` documenting every env var this plan introduces.
 **Verify:** deployed site still chats; `curl -X POST https://project-aibo.vercel.app/api/brain` from elsewhere gets 403/429; phone number gone (`curl .../adam-info.json`).
 **Depends on:** nothing.
 
@@ -231,7 +231,7 @@ verify on https://project-aibo.vercel.app; then update the STATE block in this f
 
 ## STATE — update before ending every session
 
-**Current phase:** none started → next is **Phase 0**
-**Last session:** 2026-07-04, Claude Fable 5 — Drive consolidation: canonical clone created at `G:\My Drive\AI Platforms\project-aibo\`, build.ps1 + CLAUDE.md added, AIBO_Alive retired, this file moved here. No feature code written yet.
-**Blockers:** none known. Phase 0 needs Adam to paste the two existing API keys into `.env.local` of the build mirror (`%LOCALAPPDATA%\project-aibo-build`), and to add the Upstash KV integration in the Vercel dashboard when asked.
-**Decisions since plan:** 2026-07-04 — workflow changed from "local clone at C:\projects" to canonical Drive clone + build.ps1 mirror (see § 0 CRITICAL rules). This PLAN.md's canonical copy now lives at the project-aibo repo root (committed to git); the AIBO_Alive copy is stale.
+**Current phase:** Phase 0 ✅ complete (2026-07-05) → next is **Phase 1**
+**Last session:** 2026-07-05, Claude Fable 5 — Phase 0 shipped and verified live. Commits: `d8a07b1` (phone number removed from `public/adam-info.json` + `route.ts` system prompt), `c6baaed` (`src/lib/ratelimit.ts` Upstash sliding-window 20 req/min per IP with graceful no-op when KV envs unset; origin allowlist on `/api/brain` POST → 403; `.env.example` documenting all phase envs; `@upstash/redis` + `@upstash/ratelimit` in package.json; `!.env.example` gitignore exception). `next build` passes in the mirror. Live checks: phone gone from `/adam-info.json`; POST with no/spoofed Origin → 403; allowed origin → 200 chat reply (OpenRouter).
+**Blockers:** (1) Rate limiting currently no-ops in prod — Adam must add the Upstash KV integration in the Vercel dashboard (creates `KV_REST_API_URL`/`KV_REST_API_TOKEN`); Phase 2 and 7 hard-depend on it. (2) Mirror still has no `.env.local` — Adam to paste `OPENROUTER_API_KEY` + `GOOGLE_GEMINI_API_KEY` into `%LOCALAPPDATA%\project-aibo-build\.env.local` for local chat testing.
+**Decisions since plan:** 2026-07-04 — workflow changed from "local clone at C:\projects" to canonical Drive clone + build.ps1 mirror (see § 0 CRITICAL rules). This PLAN.md's canonical copy now lives at the project-aibo repo root (committed to git); the AIBO_Alive copy is stale. 2026-07-05 — `.env.example` lives at repo root (not `src/`); origin check parses the header with `new URL()` and compares exact origin/hostname (prevents `project-aibo.vercel.app.evil.com` prefix spoofing).

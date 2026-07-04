@@ -56,7 +56,7 @@ block is structured this way.
 
 <!-- wiki-chain
 id: project-aibo-claude
-status: Consolidated 2026-07-04 — project-aibo is the single canonical repo (Next.js → Vercel). AIBO_Alive (Flask/Ollama) is retired as a separate project; its VRM assets and PLAN.md moved here. Implementation plan (9 phases) in PLAN.md.
-updated: 2026-07-04
+status: Phase 0 (security baseline) shipped 2026-07-05 — phone number removed from public assets, Upstash rate limiting (no-op until KV envs set in Vercel) + origin allowlist on /api/brain, .env.example added. Verified live. Next: Phase 1 (streaming brain v2 + personality). Plan in PLAN.md.
+updated: 2026-07-05
 links: [project-aibo, ai-platforms-claude, vtube-claude]
 -->
