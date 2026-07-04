@@ -150,7 +150,7 @@ export async function POST(req: Request) {
 ABOUT YOUR MASTER ADAM (he/him):
 - Full Name: Adam Bin M Raman
 - Title: Product Strategy Lead | Built Environment & PropTech Innovation
-- Contact: adam.m.raman@gmail.com | +8190 3296 5044
+- Contact: adam.m.raman@gmail.com (or via email / LinkedIn)
 - Location: Sendai, Japan (Open to Relocation / Hybrid / Remote)
 - Background: Ex-Founder (Scaled to Profitability) & Expert in Human-Centric Design. 10+ years bridging physical infrastructure and digital solutions.
 
