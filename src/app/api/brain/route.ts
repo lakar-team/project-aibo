@@ -5,7 +5,7 @@ import {
     decideTier,
     GEMINI_SMALL_MODELS,
     GEMINI_MAIN_MODELS,
-    OPENROUTER_DEEP_MODEL,
+    OPENROUTER_DEEP_MODELS,
 } from '@/lib/router';
 import { logCall, tierCountToday, TIER3_DAILY_CAP } from '@/lib/budget';
 
@@ -414,7 +414,7 @@ export async function POST(req: Request): Promise<Response> {
         // tier 2, and Web Witch mentions she's conserving her power.
         let tier = decision.tier;
         let conserving = false;
-        if (tier === 3 && TIER3_DAILY_CAP > 0 && (await tierCountToday(3)) >= TIER3_DAILY_CAP) {
+        if (tier === 3 && (await tierCountToday(3)) >= TIER3_DAILY_CAP) {
             tier = 2;
             conserving = true;
         }
@@ -441,7 +441,7 @@ export async function POST(req: Request): Promise<Response> {
         const orFree: Provider =
             { name: 'OpenRouter', model: 'free-rotation', gen: () => streamOpenRouter(messages) };
         const orDeep: Provider =
-            { name: 'OpenRouter', model: OPENROUTER_DEEP_MODEL, gen: () => streamOpenRouter(messages, [OPENROUTER_DEEP_MODEL]) };
+            { name: 'OpenRouter', model: OPENROUTER_DEEP_MODELS.join('|'), gen: () => streamOpenRouter(messages, OPENROUTER_DEEP_MODELS) };
 
         const providers: Provider[] =
             tier === 1 ? [...GEMINI_SMALL_MODELS.map(gem), ...GEMINI_MAIN_MODELS.map(gem), orFree]

@@ -10,7 +10,10 @@ const redis = url && token ? new Redis({ url, token }) : null;
 
 export const kvConfigured = redis !== null;
 
-export const TIER3_DAILY_CAP = Math.max(0, Number(process.env.BUDGET_TIER3_PER_DAY ?? 20) || 0);
+// 0 is a valid cap ("never use tier 3") — only fall back to the default
+// when the env var is missing or unparsable.
+const rawCap = Number(process.env.BUDGET_TIER3_PER_DAY);
+export const TIER3_DAILY_CAP = Number.isFinite(rawCap) && rawCap >= 0 ? rawCap : 20;
 
 function today(): string {
     return new Date().toISOString().slice(0, 10);

@@ -11,7 +11,8 @@ export const GEMINI_SMALL_MODELS = (process.env.GEMINI_SMALL_MODEL ?? 'gemini-2.
     .split(',').map(s => s.trim()).filter(Boolean);
 export const GEMINI_MAIN_MODELS = (process.env.GEMINI_MAIN_MODEL ?? 'gemini-2.5-flash,gemini-2.0-flash')
     .split(',').map(s => s.trim()).filter(Boolean);
-export const OPENROUTER_DEEP_MODEL = process.env.OPENROUTER_DEEP_MODEL ?? 'deepseek/deepseek-r1:free';
+export const OPENROUTER_DEEP_MODELS = (process.env.OPENROUTER_DEEP_MODEL ?? 'deepseek/deepseek-r1:free,deepseek/r1-0528:free')
+    .split(',').map(s => s.trim()).filter(Boolean);
 
 export interface ReflexReply {
     kind: 'greeting' | 'stop' | 'time' | 'date' | 'goodnight';
