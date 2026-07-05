@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "aibo-mirror",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start", "--prefix", "C:\\Users\\adamm\\AppData\\Local\\project-aibo-build"],
+      "port": 3000
+    }
+  ]
+}

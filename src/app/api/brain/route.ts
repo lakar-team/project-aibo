@@ -193,13 +193,13 @@ Adam Raman: Malaysian architect-turned-technologist in Sendai, Japan. Founder of
 
 ${personality}
 
-OUTPUT FORMAT (required — respond with ONE raw JSON object, "reply" field FIRST):
-{"reply": "your message", "emotion": "neutral", "gesture": null, "memorable": null, "lang": "en"}
+OUTPUT FORMAT (required — respond with ONE raw JSON object, fields in EXACTLY this order: "lang" first, then "reply", then the rest):
+{"lang": "en", "reply": "your message", "emotion": "neutral", "gesture": null, "memorable": null}
+- "lang": ISO 639-1 code of the language "reply" is written in ("en", "ja", "ms", "zh", "fr", "es", ...). This MUST be the first field.
 - "reply": your plain conversational response. No markdown, no lists, no JSON inside this string.
 - "emotion": exactly one of happy | sad | angry | surprised | relaxed | neutral — the feeling you express while delivering this reply.
 - "gesture": one of WAVE | NOD | SHAKE | DANCE | BOW | CROSS_ARMS | THINK, or null. Only when it clearly fits: greeting/goodbye → WAVE, agreement → NOD, refusal → SHAKE, celebration → DANCE, thanks/respect → BOW, pondering → THINK. Most replies: null.
 - "memorable": if the visitor revealed something about THEMSELVES worth remembering (their name, work, preferences, situation), one short sentence capturing it. Otherwise null.
-- "lang": ISO 639-1 code of the language "reply" is written in ("en", "ja", "ms", "zh", "fr", "es", ...).
 Return ONLY the raw JSON object — no code fences, nothing outside it.
 
 ${adamSection}
@@ -400,6 +400,7 @@ export async function POST(req: Request): Promise<Response> {
                 reason: decision.reason,
             });
             const frames =
+                JSON.stringify({ lang: r.lang }) + '\n' +
                 JSON.stringify({ t: r.reply }) + '\n' +
                 JSON.stringify({
                     done: true, reply: r.reply, emotion: r.emotion, gesture: r.gesture,
@@ -462,10 +463,17 @@ export async function POST(req: Request): Promise<Response> {
                 for (const provider of providers) {
                     const extractor = new ReplyExtractor();
                     let fullRaw = '';
+                    let langSent = false;
 
                     try {
                         for await (const chunk of provider.gen()) {
                             fullRaw += chunk;
+                            // "lang" precedes "reply" in the contract, so the
+                            // client learns the TTS voice before tokens arrive.
+                            if (!langSent) {
+                                const m = fullRaw.match(/"lang"\s*:\s*"([a-zA-Z]{2})/);
+                                if (m) { send({ lang: m[1].toLowerCase() }); langSent = true; }
+                            }
                             const extracted = extractor.feed(chunk);
                             if (extracted) send({ t: extracted });
                         }

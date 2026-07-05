@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import type { VRM } from '@pixiv/three-vrm';
 import type { VrmViewerHandle } from '@/components/VrmViewer';
+import { useKokoroTTS, kokoroVoiceFor } from '@/hooks/useKokoroTTS';
 
 const VrmViewer = dynamic(() => import('@/components/VrmViewer'), { ssr: false });
 
@@ -32,7 +33,8 @@ async function streamBrain(
   history: Message[],
   isIdlePrompt: boolean,
   onToken: (textSoFar: string) => void,
-  onStatus?: (text: string) => void
+  onStatus?: (text: string) => void,
+  onLang?: (lang: string) => void
 ): Promise<BrainDone> {
   const response = await fetch('/api/brain', {
     method: 'POST',
@@ -61,6 +63,8 @@ async function streamBrain(
     try { ev = JSON.parse(line); } catch { return; }
     if (typeof ev.t === 'string') { streamed += ev.t; onToken(streamed); }
     if (typeof ev.status === 'string' && ev.text) onStatus?.(ev.text);
+    // Early language frame — arrives before tokens so TTS can pick a voice.
+    if (typeof ev.lang === 'string' && !ev.done) onLang?.(ev.lang);
     if (ev.error) throw new Error(ev.error);
     if (ev.done) done = ev;
   };
@@ -102,6 +106,35 @@ function HomeContent() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastInteractionRef = useRef<number>(Date.now());
+
+  // Kokoro neural TTS (Phase 3). Model download starts on first user
+  // interaction; until it's ready, browser speechSynthesis is the fallback.
+  const {
+    speak: kokoroSpeak,
+    speakQueue: kokoroSpeakQueue,
+    stop: kokoroStop,
+    warmup: kokoroWarmup,
+    loading: ttsLoading,
+    ready: ttsReady,
+    error: ttsError,
+    getLevel: ttsGetLevel,
+  } = useKokoroTTS();
+
+  // warmup() on first user interaction — also satisfies the browser gesture
+  // requirement for the AudioContext the naturalizer creates lazily.
+  useEffect(() => {
+    const onFirstInteraction = () => {
+      kokoroWarmup();
+      window.removeEventListener('pointerdown', onFirstInteraction);
+      window.removeEventListener('keydown', onFirstInteraction);
+    };
+    window.addEventListener('pointerdown', onFirstInteraction);
+    window.addEventListener('keydown', onFirstInteraction);
+    return () => {
+      window.removeEventListener('pointerdown', onFirstInteraction);
+      window.removeEventListener('keydown', onFirstInteraction);
+    };
+  }, [kokoroWarmup]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -253,7 +286,7 @@ function HomeContent() {
       setMessages([{ role: 'assistant', content: reply }]);
       setStatus("Web Witch: " + reply.substring(0, 40) + "...");
       console.log("[Web Witch] greeting meta:", { emotion: done.emotion, gesture: done.gesture, lang: done.lang, model: done.model, provider: done.provider });
-      speak(reply);
+      speakSmart(reply, done.lang ?? 'en');
       lastInteractionRef.current = Date.now();
     } catch (err) {
       // Network error or 503 - use fallback greeting
@@ -285,6 +318,10 @@ function HomeContent() {
     setIsThinking(true);
     setStatus("Thinking...");
 
+    // Silence any previous speech before the new reply starts.
+    kokoroStop();
+    window.speechSynthesis.cancel();
+
     // Streaming UI: append an assistant bubble on the first token,
     // then keep replacing its content as tokens accumulate.
     let assistantAdded = false;
@@ -301,20 +338,73 @@ function HomeContent() {
       });
     };
 
+    // Streaming TTS: dispatch complete sentences to Kokoro as tokens arrive.
+    // The brain sends a {lang} frame before tokens, so the voice is known up
+    // front; if Kokoro isn't ready or has no voice for the language, nothing
+    // dispatches here and the browser fallback speaks the full reply at done.
+    let replyLang: string | null = null;
+    let pendingTTS = '';
+    let seenChars = 0;
+    let usedKokoro = false;
+
+    const streamVoice = (): string | null =>
+      ttsReady && replyLang ? kokoroVoiceFor(replyLang) : null;
+
+    const flushSentences = (isFinal: boolean) => {
+      const voice = streamVoice();
+      if (!voice) return;
+      let last = 0;
+      for (let i = 0; i < pendingTTS.length; i++) {
+        const c = pendingTTS[i];
+        const cjkEnd = c === '。' || c === '！' || c === '？';
+        const latinEnd =
+          (c === '.' || c === '!' || c === '?' || c === '…') &&
+          (pendingTTS[i + 1] === ' ' || pendingTTS[i + 1] === '\n');
+        if (cjkEnd || latinEnd) {
+          const sentence = pendingTTS.slice(last, i + 1).trim();
+          if (sentence.length > 1) {
+            console.log(`[Web Witch] TTS queue (kokoro ${voice}):`, sentence.substring(0, 40));
+            kokoroSpeakQueue(sentence, voice);
+            usedKokoro = true;
+          }
+          last = i + 1;
+        }
+      }
+      pendingTTS = pendingTTS.slice(last);
+      if (isFinal) {
+        const tail = pendingTTS.trim();
+        if (tail.length > 1) { kokoroSpeakQueue(tail, voice); usedKokoro = true; }
+        pendingTTS = '';
+      }
+    };
+
+    const onToken = (textSoFar: string) => {
+      upsertAssistant(textSoFar);
+      pendingTTS += textSoFar.slice(seenChars);
+      seenChars = textSoFar.length;
+      flushSentences(false);
+    };
+
     try {
       // Status frames ("Consulting the deeper spirits…") land in the nav bar.
-      const done = await streamBrain(text, history, isIdle, upsertAssistant, setStatus);
+      const done = await streamBrain(text, history, isIdle, onToken, setStatus, (l) => { replyLang = l; });
       const reply = done.reply || '';
 
       if (reply) {
         upsertAssistant(reply); // finalize with the canonical parsed reply
         setStatus("Web Witch: " + reply.substring(0, 40) + "...");
-        // Phase 5 wires these into the avatar; Phase 3 uses lang for TTS voice.
+        // Phase 5 wires emotion/gesture into the avatar.
         console.log("[Web Witch] reply meta:", {
           emotion: done.emotion, gesture: done.gesture, lang: done.lang,
           memorable: done.memorable, tier: done.tier, model: done.model, provider: done.provider,
         });
-        speak(reply);
+
+        replyLang = done.lang ?? replyLang ?? 'en';
+        if (streamVoice()) {
+          flushSentences(true); // speak the tail (or everything, if none dispatched yet)
+        } else if (!usedKokoro) {
+          speak(reply, replyLang); // browser fallback for the whole reply
+        }
       } else {
         setStatus("Error: empty reply");
       }
@@ -359,31 +449,41 @@ function HomeContent() {
     recognition.start();
   };
 
-  const speak = (text: string) => {
-    console.log("[Web Witch] Speaking:", text.substring(0, 50) + "...");
+  // Browser speechSynthesis — the fallback voice (Kokoro not ready, or a
+  // language Kokoro has no voice for). utterance.lang steers voice choice.
+  const speak = (text: string, lang = 'en') => {
+    console.log(`[Web Witch] Speaking (browser, ${lang}):`, text.substring(0, 50) + "...");
 
     // Cancel any pending speech
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
+    const LANG_TAGS: Record<string, string> = {
+      en: 'en-US', ja: 'ja-JP', zh: 'zh-CN', ms: 'ms-MY', ko: 'ko-KR',
+    };
+    utterance.lang = LANG_TAGS[lang] ?? lang;
+
     const voices = window.speechSynthesis.getVoices();
-
-    // Prioritize specific high-quality female voices, then fallback to any female voice
-    const femaleVoice = voices.find(v =>
-      v.name.includes("Google UK English Female") ||
-      v.name.includes("Google US English") || // Often sounds better than default
-      v.name.includes("Samantha") ||
-      v.name.toLowerCase().includes("female")
-    );
-
-    if (femaleVoice) {
-      utterance.voice = femaleVoice;
-      // Slightly higher pitch for a more feminine tone if needed
-      utterance.pitch = 1.1;
-      utterance.rate = 1.0;
+    if (lang === 'en') {
+      // Prioritize specific high-quality female voices, then fallback to any female voice
+      const femaleVoice = voices.find(v =>
+        v.name.includes("Google UK English Female") ||
+        v.name.includes("Google US English") || // Often sounds better than default
+        v.name.includes("Samantha") ||
+        v.name.toLowerCase().includes("female")
+      );
+      if (femaleVoice) {
+        utterance.voice = femaleVoice;
+        utterance.pitch = 1.1;
+        utterance.rate = 1.0;
+      }
+    } else {
+      // Match a voice for the reply language by BCP-47 prefix.
+      const langVoice = voices.find(v => v.lang.toLowerCase().startsWith(utterance.lang.toLowerCase().slice(0, 2)));
+      if (langVoice) utterance.voice = langVoice;
     }
 
-    // Trigger lip sync through the VrmViewer ref
+    // Text-based lip sync — the fallback path has no audio tap to analyze.
     if (vrmViewerRef.current) {
       vrmViewerRef.current.speakWithLipSync(text);
     }
@@ -393,6 +493,18 @@ function HomeContent() {
     };
 
     window.speechSynthesis.speak(utterance);
+  };
+
+  // Speak a complete reply with the best available voice for its language.
+  const speakSmart = (text: string, lang: string) => {
+    const voice = ttsReady ? kokoroVoiceFor(lang) : null;
+    if (voice) {
+      console.log(`[Web Witch] Speaking (kokoro ${voice}):`, text.substring(0, 50) + "...");
+      kokoroStop();
+      void kokoroSpeak(text, voice); // splits into sentences internally
+    } else {
+      speak(text, lang);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -416,11 +528,26 @@ function HomeContent() {
         <div className="text-xs text-zinc-500">{status}</div>
       </nav>
 
+      {/* Voice model loading indicator (first Kokoro warmup) */}
+      {ttsLoading && (
+        <div className="fixed top-16 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[#00f2ff]/30 bg-black/70 px-4 py-2 backdrop-blur-md">
+          <div className="h-1.5 w-28 overflow-hidden rounded-full bg-white/10">
+            <div className="h-full w-1/2 animate-pulse rounded-full bg-[#00f2ff]" />
+          </div>
+          <span className="text-xs text-[#00f2ff]">Loading voice model…</span>
+        </div>
+      )}
+      {ttsError && !ttsLoading && (
+        <div className="fixed top-16 left-1/2 z-50 -translate-x-1/2 rounded-full bg-black/60 px-4 py-1.5 text-xs text-amber-400/80 backdrop-blur-md">
+          Neural voice unavailable — using basic voice
+        </div>
+      )}
+
       <main className="relative z-10 flex h-screen flex-col lg:flex-row overflow-hidden">
         {/* Left: 3D Avatar */}
         <div className={`${isEmbedded ? 'absolute inset-0 z-0 h-full w-full' : 'relative flex h-[40vh] w-full items-center justify-center lg:h-full lg:w-1/2'}`}>
           <div className="relative h-full w-full">
-            <VrmViewer ref={vrmViewerRef} isEmbedded={isEmbedded} onLoaded={handleVrmLoaded} />
+            <VrmViewer ref={vrmViewerRef} isEmbedded={isEmbedded} onLoaded={handleVrmLoaded} getAudioLevel={ttsGetLevel} />
             <div className={`absolute inset-0 pointer-events-none ${isEmbedded ? 'bg-gradient-to-b from-black/30 via-transparent to-black/60' : 'bg-gradient-to-t from-[#050505] via-transparent to-transparent'}`} />
 
             {/* Mystical Summoning Overlay */}

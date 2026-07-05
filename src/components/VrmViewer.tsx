@@ -8,6 +8,8 @@ import { VRMLoaderPlugin, VRMUtils, VRM } from '@pixiv/three-vrm';
 interface VrmViewerProps {
     onLoaded?: (vrm: VRM) => void;
     isEmbedded?: boolean;
+    /** Returns current TTS audio RMS (0 when silent) — drives the mouth when Kokoro speaks. */
+    getAudioLevel?: () => number;
 }
 
 export interface VrmViewerHandle {
@@ -15,11 +17,19 @@ export interface VrmViewerHandle {
     setFacingDirection: (direction: 'front' | 'back') => void;
 }
 
-const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded, isEmbedded }, ref) => {
+const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded, isEmbedded, getAudioLevel }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const vrmRef = useRef<VRM | null>(null);
     const isSpeakingRef = useRef(false);
     const targetRotationRef = useRef<number>(Math.PI); // Default: facing front (model is rotated 180°)
+
+    // Kept in refs so the scene-setup effect doesn't tear down and rebuild the
+    // whole Three.js scene (and re-download the VRM) when the parent re-renders
+    // with fresh function identities — which happens on every streamed token.
+    const getAudioLevelRef = useRef<VrmViewerProps['getAudioLevel']>(getAudioLevel);
+    getAudioLevelRef.current = getAudioLevel;
+    const onLoadedRef = useRef<VrmViewerProps['onLoaded']>(onLoaded);
+    onLoadedRef.current = onLoaded;
 
     // Expose functions to parent
     useImperativeHandle(ref, () => ({
@@ -79,7 +89,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded, isEmb
                 vrm.scene.rotation.y = Math.PI;
                 scene.add(vrm.scene);
                 vrmRef.current = vrm;
-                if (onLoaded) onLoaded(vrm);
+                onLoadedRef.current?.(vrm);
             },
             (progress) => console.log('Loading avatar: ' + (100.0 * progress.loaded / progress.total).toFixed(2) + '%'),
             (error) => console.error('Failed to load avatar:', error)
@@ -88,6 +98,7 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded, isEmb
         // Animation state
         const clock = new THREE.Clock();
         let animationId: number;
+        let mouthLevel = 0; // smoothed audio-driven mouth openness
         let blinkTimer = 0;
         let nextBlinkTime = Math.random() * 3 + 2; // Random blink every 2-5 seconds
         let isBlinking = false;
@@ -173,10 +184,20 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded, isEmb
                     }
                 }
 
-                // === LIP SYNC (when speaking) ===
-                if (isSpeakingRef.current) {
+                // === LIP SYNC ===
+                // Preferred: amplitude-driven mouth from the Kokoro audio chain
+                // (AnalyserNode RMS). Fallback: the old text-length sine wave,
+                // used while browser speechSynthesis speaks (no audio tap there).
+                const audioLevel = getAudioLevelRef.current?.() ?? 0;
+                if (audioLevel > 0.005) {
+                    // Attack fast, release slower — reads as natural articulation.
+                    const target = Math.min(1, audioLevel * 6.5);
+                    mouthLevel += (target - mouthLevel) * (target > mouthLevel ? 0.55 : 0.28);
+                    vrm.expressionManager?.setValue('aa', mouthLevel);
+                    vrm.expressionManager?.setValue('oh', mouthLevel * 0.25);
+                    vrm.expressionManager?.setValue('ee', 0);
+                } else if (isSpeakingRef.current) {
                     // Simulate mouth movement with varying vowel shapes
-                    const mouthOpenAmount = (Math.sin(elapsed * 12) + 1) * 0.3 + 0.1;
                     const aaAmount = (Math.sin(elapsed * 15) + 1) * 0.25;
                     const ohAmount = (Math.cos(elapsed * 10) + 1) * 0.15;
 
@@ -184,8 +205,9 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded, isEmb
                     vrm.expressionManager?.setValue('oh', ohAmount);
                     vrm.expressionManager?.setValue('ee', (Math.sin(elapsed * 8) + 1) * 0.1);
                 } else {
-                    // Reset mouth when not speaking
-                    vrm.expressionManager?.setValue('aa', 0);
+                    // Reset mouth when not speaking (ease shut, don't snap)
+                    mouthLevel += (0 - mouthLevel) * 0.3;
+                    vrm.expressionManager?.setValue('aa', mouthLevel < 0.02 ? 0 : mouthLevel);
                     vrm.expressionManager?.setValue('oh', 0);
                     vrm.expressionManager?.setValue('ee', 0);
                 }
@@ -195,25 +217,32 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded, isEmb
         };
         animate();
 
-        // Resize handler
+        // Resize handling: a ResizeObserver on the container fires on initial
+        // layout too — the container can measure 0×0 at mount (hydration runs
+        // before CSS layout), which used to leave the canvas permanently empty.
         const handleResize = () => {
             if (!containerRef.current) return;
-            renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
-            camera.aspect = containerRef.current.clientWidth / containerRef.current.clientHeight;
+            const { clientWidth, clientHeight } = containerRef.current;
+            if (clientWidth === 0 || clientHeight === 0) return;
+            renderer.setSize(clientWidth, clientHeight);
+            camera.aspect = clientWidth / clientHeight;
             camera.updateProjectionMatrix();
         };
         window.addEventListener('resize', handleResize);
+        const resizeObserver = new ResizeObserver(handleResize);
+        resizeObserver.observe(containerRef.current);
 
         const currentContainer = containerRef.current;
         return () => {
             window.removeEventListener('resize', handleResize);
+            resizeObserver.disconnect();
             cancelAnimationFrame(animationId);
             renderer.dispose();
             if (currentContainer && currentContainer.contains(renderer.domElement)) {
                 currentContainer.removeChild(renderer.domElement);
             }
         };
-    }, [onLoaded, isEmbedded]);
+    }, [isEmbedded]);
 
     return <div ref={containerRef} className="h-full w-full" />;
 });
