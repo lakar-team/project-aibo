@@ -56,7 +56,7 @@ block is structured this way.
 
 <!-- wiki-chain
 id: project-aibo-claude
-status: Phase 0 (security baseline) shipped 2026-07-05 — phone number removed from public assets, Upstash rate limiting (no-op until KV envs set in Vercel) + origin allowlist on /api/brain, .env.example added. Verified live. Next: Phase 1 (streaming brain v2 + personality). Plan in PLAN.md.
+status: Phases 0–1 shipped 2026-07-05 — security baseline (rate limit no-ops until Upstash KV added in Vercel; origin allowlist live), then brain v2: NDJSON streaming with history + turn-aware compression, structured {reply, emotion, gesture, memorable, lang} contract, personality.ts from Kip's PERSONALITY.md, adamProfile.ts from solar-punk. Verified live incl. Japanese mirror. Next: Phase 2 (model router + budget). Plan in PLAN.md.
 updated: 2026-07-05
 links: [project-aibo, ai-platforms-claude, vtube-claude]
 -->
