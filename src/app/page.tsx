@@ -20,6 +20,7 @@ interface BrainDone {
   gesture?: string | null;
   memorable?: string | null;
   lang?: string;
+  tier?: number;
   model?: string;
   provider?: string;
 }
@@ -30,7 +31,8 @@ async function streamBrain(
   message: string,
   history: Message[],
   isIdlePrompt: boolean,
-  onToken: (textSoFar: string) => void
+  onToken: (textSoFar: string) => void,
+  onStatus?: (text: string) => void
 ): Promise<BrainDone> {
   const response = await fetch('/api/brain', {
     method: 'POST',
@@ -55,9 +57,10 @@ async function streamBrain(
 
   const handleLine = (line: string) => {
     if (!line.trim()) return;
-    let ev: { t?: string; error?: string; done?: boolean } & BrainDone;
+    let ev: { t?: string; error?: string; done?: boolean; status?: string; text?: string } & BrainDone;
     try { ev = JSON.parse(line); } catch { return; }
     if (typeof ev.t === 'string') { streamed += ev.t; onToken(streamed); }
+    if (typeof ev.status === 'string' && ev.text) onStatus?.(ev.text);
     if (ev.error) throw new Error(ev.error);
     if (ev.done) done = ev;
   };
@@ -299,7 +302,8 @@ function HomeContent() {
     };
 
     try {
-      const done = await streamBrain(text, history, isIdle, upsertAssistant);
+      // Status frames ("Consulting the deeper spirits…") land in the nav bar.
+      const done = await streamBrain(text, history, isIdle, upsertAssistant, setStatus);
       const reply = done.reply || '';
 
       if (reply) {
@@ -308,7 +312,7 @@ function HomeContent() {
         // Phase 5 wires these into the avatar; Phase 3 uses lang for TTS voice.
         console.log("[Web Witch] reply meta:", {
           emotion: done.emotion, gesture: done.gesture, lang: done.lang,
-          memorable: done.memorable, model: done.model, provider: done.provider,
+          memorable: done.memorable, tier: done.tier, model: done.model, provider: done.provider,
         });
         speak(reply);
       } else {

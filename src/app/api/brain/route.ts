@@ -1,6 +1,13 @@
 import { checkRateLimit } from '@/lib/ratelimit';
 import { personality } from '@/data/personality';
 import { adamNarrative, siteMap } from '@/data/adamProfile';
+import {
+    decideTier,
+    GEMINI_SMALL_MODELS,
+    GEMINI_MAIN_MODELS,
+    OPENROUTER_DEEP_MODEL,
+} from '@/lib/router';
+import { logCall, tierCountToday, TIER3_DAILY_CAP } from '@/lib/budget';
 
 export const runtime = 'edge';
 
@@ -205,7 +212,7 @@ Reply in the language the user wrote in.`;
 // STREAMING PROVIDERS — Gemini first, OpenRouter fallback
 // ============================================================
 
-async function* streamGemini(messages: ConversationMessage[]): AsyncGenerator<string> {
+async function* streamGemini(messages: ConversationMessage[], model: string): AsyncGenerator<string> {
     const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
     if (!apiKey) throw new Error('GOOGLE_GEMINI_API_KEY not configured');
 
@@ -213,7 +220,7 @@ async function* streamGemini(messages: ConversationMessage[]): AsyncGenerator<st
     const chatMessages = messages.filter(m => m.role !== 'system');
 
     const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?key=${apiKey}&alt=sse`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${apiKey}&alt=sse`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -263,19 +270,22 @@ async function* streamGemini(messages: ConversationMessage[]): AsyncGenerator<st
     }
 }
 
-async function* streamOpenRouter(messages: ConversationMessage[]): AsyncGenerator<string> {
+const OPENROUTER_FREE_ROTATION = [
+    'google/gemini-2.0-flash-exp:free',
+    'meta-llama/llama-3.3-70b-instruct:free',
+    'deepseek/deepseek-chat-v3-0324:free',
+    'mistralai/mistral-small-3.1-24b-instruct:free',
+    'openrouter/auto',
+];
+
+async function* streamOpenRouter(
+    messages: ConversationMessage[],
+    models: string[] = OPENROUTER_FREE_ROTATION
+): AsyncGenerator<string> {
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) throw new Error('OPENROUTER_API_KEY not configured');
 
-    const MODELS = [
-        'google/gemini-2.0-flash-exp:free',
-        'meta-llama/llama-3.3-70b-instruct:free',
-        'deepseek/deepseek-chat-v3-0324:free',
-        'mistralai/mistral-small-3.1-24b-instruct:free',
-        'openrouter/auto',
-    ];
-
-    for (const model of MODELS) {
+    for (const model of models) {
         let yielded = false;
         try {
             const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -375,23 +385,79 @@ export async function POST(req: Request): Promise<Response> {
         // Prior user turns decide prompt verbosity (turn-aware compression).
         const turnIndex = cleanHistory.filter(m => m.role === 'user').length;
 
+        const encoder = new TextEncoder();
+
+        // ---- Phase 2: tier routing ----
+        const decision = await decideTier(message, cleanHistory);
+
+        // Tier 0 reflex: canned reply, no LLM call at all.
+        if (decision.tier === 0 && decision.reflex) {
+            const r = decision.reflex;
+            await logCall({
+                tier: 0, model: 'reflex', provider: 'reflex',
+                in_tokens_est: Math.ceil(message.length / 4),
+                out_tokens_est: Math.ceil(r.reply.length / 4),
+                reason: decision.reason,
+            });
+            const frames =
+                JSON.stringify({ t: r.reply }) + '\n' +
+                JSON.stringify({
+                    done: true, reply: r.reply, emotion: r.emotion, gesture: r.gesture,
+                    memorable: null, lang: r.lang, tier: 0, model: 'reflex', provider: 'reflex',
+                }) + '\n';
+            return new Response(frames, {
+                headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8' },
+            });
+        }
+
+        // Soft budget cap: tier 3 over its daily allowance downgrades to
+        // tier 2, and Web Witch mentions she's conserving her power.
+        let tier = decision.tier;
+        let conserving = false;
+        if (tier === 3 && TIER3_DAILY_CAP > 0 && (await tierCountToday(3)) >= TIER3_DAILY_CAP) {
+            tier = 2;
+            conserving = true;
+        }
+
+        const systemContent =
+            buildSystemPrompt(turnIndex, isIdlePrompt === true) +
+            (conserving
+                ? '\nNOTE: your deeper powers reached their daily budget, so you are conserving energy. If this question needed deep thought, briefly mention in character that you are conserving your power today.'
+                : '');
+
         const messages: ConversationMessage[] = [
-            { role: 'system', content: buildSystemPrompt(turnIndex, isIdlePrompt === true) },
+            { role: 'system', content: systemContent },
             ...(cleanHistory as ConversationMessage[]),
             { role: 'user', content: message },
         ];
 
-        const encoder = new TextEncoder();
+        const inTokensEst = Math.ceil(messages.reduce((n, m) => n + m.content.length, 0) / 4);
+
+        // Provider chain per tier — cheapest capable model first, with
+        // graceful degradation down the chain (and up to OpenRouter free).
+        interface Provider { name: string; model: string; gen: () => AsyncGenerator<string> }
+        const gem = (model: string): Provider =>
+            ({ name: 'Google Gemini', model, gen: () => streamGemini(messages, model) });
+        const orFree: Provider =
+            { name: 'OpenRouter', model: 'free-rotation', gen: () => streamOpenRouter(messages) };
+        const orDeep: Provider =
+            { name: 'OpenRouter', model: OPENROUTER_DEEP_MODEL, gen: () => streamOpenRouter(messages, [OPENROUTER_DEEP_MODEL]) };
+
+        const providers: Provider[] =
+            tier === 1 ? [...GEMINI_SMALL_MODELS.map(gem), ...GEMINI_MAIN_MODELS.map(gem), orFree]
+            : tier === 3 ? [orDeep, ...GEMINI_MAIN_MODELS.map(gem), orFree]
+            : [...GEMINI_MAIN_MODELS.map(gem), orFree];
 
         const stream = new ReadableStream({
             async start(controller) {
                 const send = (obj: object) =>
                     controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'));
 
-                const providers = [
-                    { name: 'Google Gemini', model: 'gemini-2.0-flash', gen: () => streamGemini(messages) },
-                    { name: 'OpenRouter',    model: 'openrouter',       gen: () => streamOpenRouter(messages) },
-                ];
+                // Kip's transparency rule: say when the deep mind wakes.
+                if (tier === 3) send({ status: 'deep', text: 'Consulting the deeper spirits…' });
+                if (conserving) send({ status: 'conserving', text: 'Conserving my deeper powers today…' });
+
+                const diag: string[] = [];
 
                 for (const provider of providers) {
                     const extractor = new ReplyExtractor();
@@ -403,16 +469,25 @@ export async function POST(req: Request): Promise<Response> {
                             const extracted = extractor.feed(chunk);
                             if (extracted) send({ t: extracted });
                         }
-                    } catch {
+                    } catch (err) {
+                        const errMsg = err instanceof Error ? err.message : String(err);
+                        diag.push(`${provider.name}(${provider.model}): ${errMsg.slice(0, 160)}`);
+                        console.warn(`[brain] provider failed — ${provider.name} ${provider.model}:`, errMsg);
                         if (fullRaw) {
                             // Partial response received — send what we have.
                             const parsed = parseStructuredReply(fullRaw);
+                            await logCall({
+                                tier, model: provider.model, provider: provider.name,
+                                in_tokens_est: inTokensEst,
+                                out_tokens_est: Math.ceil(fullRaw.length / 4),
+                                reason: decision.reason,
+                            });
                             send({
                                 done: true,
                                 ...parsed,
                                 reply: parsed.reply || 'Something interrupted my crystal ball...',
-                                model: provider.model,
-                                provider: provider.name,
+                                tier, model: provider.model, provider: provider.name,
+                                ...(diag.length ? { diag } : {}),
                             });
                             controller.close();
                             return;
@@ -422,13 +497,23 @@ export async function POST(req: Request): Promise<Response> {
 
                     if (fullRaw) {
                         const parsed = parseStructuredReply(fullRaw);
-                        send({ done: true, ...parsed, model: provider.model, provider: provider.name });
+                        await logCall({
+                            tier, model: provider.model, provider: provider.name,
+                            in_tokens_est: inTokensEst,
+                            out_tokens_est: Math.ceil(fullRaw.length / 4),
+                            reason: decision.reason,
+                        });
+                        send({
+                            done: true, ...parsed, tier,
+                            model: provider.model, provider: provider.name,
+                            ...(diag.length ? { diag } : {}),
+                        });
                         controller.close();
                         return;
                     }
                 }
 
-                send({ error: 'All AI providers failed.' });
+                send({ error: 'All AI providers failed.', ...(diag.length ? { diag } : {}) });
                 controller.close();
             },
         });
