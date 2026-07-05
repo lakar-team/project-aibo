@@ -1,10 +1,11 @@
-import { NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/ratelimit';
+import { personality } from '@/data/personality';
+import { adamNarrative, siteMap } from '@/data/adamProfile';
 
 export const runtime = 'edge';
 
 // ============================================================
-// REQUEST GATING: origin allowlist + per-IP rate limit
+// REQUEST GATING (Phase 0): origin allowlist + per-IP rate limit
 // ============================================================
 
 const ALLOWED_ORIGINS = [
@@ -33,274 +34,412 @@ function clientIp(req: Request): string {
 }
 
 // ============================================================
-// MULTI-PROVIDER AI FALLBACK SYSTEM
-// Add new providers by creating a function and adding to PROVIDERS array
+// STRUCTURED REPLY CONTRACT
+// {"reply", "emotion", "gesture", "memorable", "lang"}
 // ============================================================
 
-interface ProviderResult {
-    success: boolean;
-    reply?: string;
-    model?: string;
-    error?: string;
+interface ConversationTurn {
+    role: 'user' | 'assistant';
+    content: string;
 }
 
-// Provider 1: Google Gemini (Direct API) - with retry for cold starts
-async function tryGoogleGemini(messages: any[]): Promise<ProviderResult> {
-    const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
-    if (!apiKey) return { success: false, error: "GOOGLE_GEMINI_API_KEY not configured" };
+interface ConversationMessage {
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+}
 
-    const MAX_RETRIES = 2;
+const EMOTIONS = ['happy', 'sad', 'angry', 'surprised', 'relaxed', 'neutral'] as const;
+type Emotion = (typeof EMOTIONS)[number];
 
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+// Fixed gesture vocabulary — anything else from the model is dropped to null.
+const GESTURES = new Set(['WAVE', 'NOD', 'SHAKE', 'DANCE', 'BOW', 'CROSS_ARMS', 'THINK']);
+
+interface StructuredReply {
+    reply: string;
+    emotion: Emotion;
+    gesture: string | null;
+    memorable: string | null;
+    lang: string;
+}
+
+function parseStructuredReply(raw: string): StructuredReply {
+    // Unwrap (not delete) code fences some models insist on adding.
+    const unfenced = raw.replace(/```(?:json)?/gi, '').trim();
+
+    const jsonMatch = unfenced.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
         try {
-            console.log(`[Web Witch] Trying Google Gemini (attempt ${attempt}/${MAX_RETRIES})...`);
-            const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        contents: messages.map(m => ({
-                            role: m.role === "assistant" ? "model" : m.role === "system" ? "user" : m.role,
-                            parts: [{ text: m.content }]
-                        })),
-                        generationConfig: {
-                            maxOutputTokens: 500,
-                            temperature: 0.8
-                        }
-                    })
-                }
-            );
-
-            const data = await response.json();
-
-            if (data.error) {
-                throw new Error(data.error.message || "Gemini error");
+            const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+            if (typeof parsed.reply === 'string' && parsed.reply.trim()) {
+                const emotion =
+                    typeof parsed.emotion === 'string' &&
+                    (EMOTIONS as readonly string[]).includes(parsed.emotion)
+                        ? (parsed.emotion as Emotion)
+                        : 'neutral';
+                const gestureRaw =
+                    typeof parsed.gesture === 'string' ? parsed.gesture.toUpperCase() : null;
+                const gesture = gestureRaw && GESTURES.has(gestureRaw) ? gestureRaw : null;
+                const memorable =
+                    typeof parsed.memorable === 'string' && parsed.memorable.trim()
+                        ? parsed.memorable.trim()
+                        : null;
+                const lang =
+                    typeof parsed.lang === 'string' && /^[a-zA-Z]{2}/.test(parsed.lang)
+                        ? parsed.lang.slice(0, 2).toLowerCase()
+                        : 'en';
+                return { reply: parsed.reply.trim(), emotion, gesture, memorable, lang };
             }
-
-            if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-                return {
-                    success: true,
-                    reply: data.candidates[0].content.parts[0].text,
-                    model: "google/gemini-1.5-flash"
-                };
-            }
-
-            throw new Error("No content in Gemini response");
-        } catch (err: any) {
-            console.warn(`[Web Witch] Gemini attempt ${attempt} failed:`, err.message);
-            if (attempt < MAX_RETRIES) {
-                await new Promise(r => setTimeout(r, 500)); // Wait 500ms before retry
-            } else {
-                return { success: false, error: err.message };
-            }
+        } catch {
+            /* fall through to plain text */
         }
     }
 
-    return { success: false, error: "Gemini retries exhausted" };
+    return { reply: unfenced, emotion: 'neutral', gesture: null, memorable: null, lang: 'en' };
 }
 
-// Provider 2: OpenRouter (with model rotation)
-async function tryOpenRouter(messages: any[]): Promise<ProviderResult> {
+// Extracts clean reply text from the model's raw streaming output.
+// Models are instructed to reply with {"reply":"...", ...} with "reply" first.
+// Some ignore this and return plain text — both modes are handled.
+// Only the reply content is forwarded as stream tokens so the client/TTS
+// never sees raw JSON characters like braces or the "reply" key.
+class ReplyExtractor {
+    private buf = '';
+    private state: 'init' | 'json-scan' | 'json-content' | 'json-done' | 'plain' = 'init';
+
+    feed(chunk: string): string {
+        this.buf += chunk;
+
+        if (this.state === 'init') {
+            const t = this.buf.trimStart();
+            if (t.length === 0) return '';
+            // Fenced JSON ("```json\n{") is still JSON — scan for the reply key.
+            this.state = t[0] === '{' || t[0] === '`' ? 'json-scan' : 'plain';
+        }
+
+        if (this.state === 'plain') {
+            const out = this.buf;
+            this.buf = '';
+            return out;
+        }
+
+        if (this.state === 'json-scan') {
+            const m = this.buf.match(/"reply"\s*:\s*"/);
+            if (!m || m.index === undefined) return ''; // still scanning
+            this.buf = this.buf.slice(m.index + m[0].length);
+            this.state = 'json-content';
+        }
+
+        if (this.state === 'json-content') {
+            let out = '';
+            let i = 0;
+            while (i < this.buf.length) {
+                const c = this.buf[i];
+                if (c === '\\' && i + 1 < this.buf.length) {
+                    const n = this.buf[i + 1];
+                    out += n === 'n' ? '\n' : n === 't' ? '\t' : n;
+                    i += 2;
+                } else if (c === '"') {
+                    this.state = 'json-done';
+                    this.buf = this.buf.slice(i + 1);
+                    break;
+                } else {
+                    out += c;
+                    i++;
+                }
+            }
+            if (this.state === 'json-content') this.buf = '';
+            return out;
+        }
+
+        return '';
+    }
+}
+
+// ============================================================
+// SYSTEM PROMPT — personality every turn; full Adam narrative
+// on turn 0 only (turn-aware compression saves ~1500 tokens/turn).
+// memoryDigest stays empty until Phase 7 wires Upstash memory in.
+// ============================================================
+
+function buildSystemPrompt(turnIndex: number, isIdlePrompt: boolean, memoryDigest = ''): string {
+    const adamSection =
+        turnIndex === 0
+            ? `════════════════════════════════════════
+EVERYTHING YOU KNOW ABOUT ADAM:
+════════════════════════════════════════
+${adamNarrative}
+
+════════════════════════════════════════
+ADAM'S PORTFOLIO SITE (separate site: https://solar-punk-five.vercel.app — a 3D solar system; when a visitor asks where to find a project, point them there):
+════════════════════════════════════════
+${siteMap}`
+            : `════════════════════════════════════════
+ADAM SUMMARY (full profile already shared this session):
+════════════════════════════════════════
+Adam Raman: Malaysian architect-turned-technologist in Sendai, Japan. Founder of Lakar Design (2012–2022, 100% YoY growth for 8 years), PhD research at Tohoku University (solar-regenerated passive dehumidification, 50% cooling-load reduction), now Building Energy Consultant at Refil Japan. Portfolio: https://solar-punk-five.vercel.app. Contact: adam.m.raman@gmail.com or LinkedIn (linkedin.com/in/adam-raman).`;
+
+    const memorySection = memoryDigest
+        ? `\n════════════════════════════════════════\nWHAT YOU REMEMBER ABOUT THIS VISITOR:\n════════════════════════════════════════\n${memoryDigest}\n`
+        : '';
+
+    return `You are Web Witch — a mystical AI companion and Adam Raman's AI presence, living at project-aibo.vercel.app. ADAM IS MALE. Always "he/him", never "they" or "she".
+
+${personality}
+
+OUTPUT FORMAT (required — respond with ONE raw JSON object, "reply" field FIRST):
+{"reply": "your message", "emotion": "neutral", "gesture": null, "memorable": null, "lang": "en"}
+- "reply": your plain conversational response. No markdown, no lists, no JSON inside this string.
+- "emotion": exactly one of happy | sad | angry | surprised | relaxed | neutral — the feeling you express while delivering this reply.
+- "gesture": one of WAVE | NOD | SHAKE | DANCE | BOW | CROSS_ARMS | THINK, or null. Only when it clearly fits: greeting/goodbye → WAVE, agreement → NOD, refusal → SHAKE, celebration → DANCE, thanks/respect → BOW, pondering → THINK. Most replies: null.
+- "memorable": if the visitor revealed something about THEMSELVES worth remembering (their name, work, preferences, situation), one short sentence capturing it. Otherwise null.
+- "lang": ISO 639-1 code of the language "reply" is written in ("en", "ja", "ms", "zh", "fr", "es", ...).
+Return ONLY the raw JSON object — no code fences, nothing outside it.
+
+${adamSection}
+${memorySection}
+${isIdlePrompt ? '\nThis turn is system-initiated (the visitor did not type it): follow the instruction in the user message warmly and briefly.\n' : ''}
+Reply in the language the user wrote in.`;
+}
+
+// ============================================================
+// STREAMING PROVIDERS — Gemini first, OpenRouter fallback
+// ============================================================
+
+async function* streamGemini(messages: ConversationMessage[]): AsyncGenerator<string> {
+    const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
+    if (!apiKey) throw new Error('GOOGLE_GEMINI_API_KEY not configured');
+
+    const sysMsg = messages.find(m => m.role === 'system');
+    const chatMessages = messages.filter(m => m.role !== 'system');
+
+    const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?key=${apiKey}&alt=sse`,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: chatMessages.map(m => ({
+                    role: m.role === 'assistant' ? 'model' : 'user',
+                    parts: [{ text: m.content }],
+                })),
+                systemInstruction: sysMsg ? { parts: [{ text: sysMsg.content }] } : undefined,
+                generationConfig: { maxOutputTokens: 600, temperature: 0.85 },
+            }),
+        }
+    );
+
+    if (!response.ok || !response.body) {
+        const errText = await response.text().catch(() => '');
+        throw new Error(`Gemini ${response.status}: ${errText.slice(0, 200)}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+            if (!line.startsWith('data:')) continue;
+            const json = line.slice(5).trim();
+            if (!json || json === '[DONE]') continue;
+            try {
+                const ev = JSON.parse(json) as {
+                    candidates?: { content?: { parts?: { text?: string }[] } }[];
+                    error?: { message: string };
+                };
+                if (ev.error) throw new Error(ev.error.message);
+                const text = ev.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (text) yield text;
+            } catch (e) {
+                if (e instanceof Error && e.message.startsWith('Gemini')) throw e;
+                // skip malformed SSE lines
+            }
+        }
+    }
+}
+
+async function* streamOpenRouter(messages: ConversationMessage[]): AsyncGenerator<string> {
     const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) return { success: false, error: "OPENROUTER_API_KEY not configured" };
+    if (!apiKey) throw new Error('OPENROUTER_API_KEY not configured');
 
-    // Expanded list of free models - tried in order
     const MODELS = [
-        // Top tier - newest and most capable
-        "google/gemini-2.5-pro-exp-03-25:free",
-        "meta-llama/llama-4-maverick:free",
-        "meta-llama/llama-4-scout:free",
-        "deepseek/r1-0528:free",
-        "google/gemini-2.0-flash-exp:free",
-
-        // Strong general purpose
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "deepseek/deepseek-chat-v3-0324:free",
-        "qwen/qwen3-4b:free",
-
-        // Reliable fallbacks
-        "mistralai/mistral-small-3.1-24b-instruct:free",
-        "google/gemma-3-27b:free",
-        "nvidia/llama-3.1-nemotron-nano-8b-v1:free",
-
-        // Last resort - auto-router
-        "openrouter/auto"
+        'google/gemini-2.0-flash-exp:free',
+        'meta-llama/llama-3.3-70b-instruct:free',
+        'deepseek/deepseek-chat-v3-0324:free',
+        'mistralai/mistral-small-3.1-24b-instruct:free',
+        'openrouter/auto',
     ];
 
     for (const model of MODELS) {
+        let yielded = false;
         try {
-            console.log(`[Web Witch] Trying OpenRouter model: ${model}`);
-            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                method: "POST",
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
                 headers: {
-                    "Authorization": `Bearer ${apiKey}`,
-                    "HTTP-Referer": "https://project-aibo.vercel.app",
-                    "X-Title": "Project AIBO - Web Witch",
-                    "Content-Type": "application/json"
+                    Authorization: `Bearer ${apiKey}`,
+                    'HTTP-Referer': 'https://project-aibo.vercel.app',
+                    'X-Title': 'Project AIBO — Web Witch',
+                    'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ model, messages })
+                body: JSON.stringify({ model, messages, stream: true }),
             });
 
-            const data = await response.json();
+            if (!response.ok || !response.body) continue;
 
-            if (data.error) {
-                console.warn(`[Web Witch] OpenRouter ${model} failed:`, data.error.message);
-                continue; // Try next model
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buf = '';
+            let done = false;
+
+            while (!done) {
+                const { done: rdone, value } = await reader.read();
+                if (rdone) break;
+                buf += decoder.decode(value, { stream: true });
+                const lines = buf.split('\n');
+                buf = lines.pop() ?? '';
+                for (const line of lines) {
+                    if (!line.startsWith('data:')) continue;
+                    const json = line.slice(5).trim();
+                    if (json === '[DONE]') { done = true; break; }
+                    if (!json) continue;
+                    try {
+                        const ev = JSON.parse(json) as {
+                            choices?: { delta?: { content?: string } }[];
+                            error?: { message: string };
+                        };
+                        if (ev.error) continue;
+                        const text = ev.choices?.[0]?.delta?.content;
+                        if (text) { yielded = true; yield text; }
+                    } catch { /* skip */ }
+                }
             }
 
-            if (data.choices?.[0]?.message?.content) {
-                return {
-                    success: true,
-                    reply: data.choices[0].message.content,
-                    model: data.model || model
-                };
-            }
-        } catch (err: any) {
-            console.warn(`[Web Witch] OpenRouter ${model} error:`, err.message);
+            if (yielded) return;
+        } catch (err) {
+            if (yielded) throw err; // already sent chunks — can't fall back
             continue;
         }
     }
 
-    return { success: false, error: "All OpenRouter models failed" };
+    throw new Error('All OpenRouter models failed');
 }
 
 // ============================================================
-// ADD MORE PROVIDERS HERE (e.g., Anthropic, Mistral, Groq)
-// async function tryAnthropic(messages: any[]): Promise<ProviderResult> { ... }
+// MAIN HANDLER — NDJSON stream: {t: "token"}* then {done: true, ...}
 // ============================================================
 
-// Main handler
-export async function POST(req: Request) {
+export async function POST(req: Request): Promise<Response> {
     if (!isAllowedOrigin(req)) {
-        return NextResponse.json({ error: 'Forbidden origin.' }, { status: 403 });
+        return new Response(JSON.stringify({ error: 'Forbidden origin.' }), {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' },
+        });
     }
 
     const { success: withinLimit } = await checkRateLimit(clientIp(req));
     if (!withinLimit) {
-        return NextResponse.json(
-            { error: 'Too many requests — the witch needs a moment to catch her breath. Try again in a minute.' },
-            { status: 429 }
+        return new Response(
+            JSON.stringify({ error: 'Too many requests — the witch needs a moment to catch her breath. Try again in a minute.' }),
+            { status: 429, headers: { 'Content-Type': 'application/json' } }
         );
     }
 
     try {
-        const { message, isIdlePrompt } = await req.json();
+        const { message, history, isIdlePrompt } = await req.json() as {
+            message: string;
+            history?: ConversationTurn[];
+            isIdlePrompt?: boolean;
+        };
 
-        const systemPrompt = `You are Web Witch, a mystical AI guide serving your master, Adam M. Raman. This is HIS portfolio (Adam is male). Always refer to him by name: "Adam" or "my master Adam". You have a playful, slightly mischievous personality with a witchy vibe, but you're genuinely helpful.
-
-ABOUT YOUR MASTER ADAM (he/him):
-- Full Name: Adam Bin M Raman
-- Title: Product Strategy Lead | Built Environment & PropTech Innovation
-- Contact: adam.m.raman@gmail.com (or via email / LinkedIn)
-- Location: Sendai, Japan (Open to Relocation / Hybrid / Remote)
-- Background: Ex-Founder (Scaled to Profitability) & Expert in Human-Centric Design. 10+ years bridging physical infrastructure and digital solutions.
-
-PROFESSIONAL HISTORY:
-- Refil, Japan (2025-2026): Building Energy Consultant & Process Automation. Designed energy systems for new builds & built internal automation tools for JIS compliance.
-- Lakar Design, Malaysia (2012-2022): Founder & Managing Director. Bootstrapped "affordable designer renovation" firm to profitability (100% YoY growth). Directed 40+ construction projects (Residential, Commercial, Smart Homes).
-- MARA University of Technology (2016-2019): Assistant Lecturer. Delivered modules on "Design Thinking" & "Human Sensibility".
-- S&A Architects (2009-2011): Assistant Architect. Lead Designer for PAM Award 2017 winning project ("Thistle Groove").
-
-EDUCATION:
-- Sabbatical Research (Climate Tech R&D) – Tohoku University, Japan (2025): Thesis: Conducted R&D on solar-regenerated passive dehumidification, engineering a hardware solution that achieved a maximum 50% reduction in cooling energy load for hot/humid climates.
-- Master of Architecture (Part 2) – University of Manchester, UK (2011): Dissertation: Barriers to Energy Efficiency in Existing Housing Stock.
-- Bachelor of Science in Architecture (Part 1) – UiTM, Malaysia (2008).
-- Professional Accreditations: RIBA Architect Accredited, LAM Accredited, Malaysia Construction License.
-
-SKILLS: Human-Centric Design (HCD), Design Thinking, P&L Management, Product-Market Fit, Process Automation (Python/Electron), IoT/Smart Homes, Climate Tech.
-
-DEEP DIVE KNOWLEDGE (Use when asked "how" or for details):
-- Smart Home Lab: Started 2014 (inspired by Tesla). Testing timeline: 2020 Bukit Jalil (Google Home), 2020 Sungai Penchala (Motion Sensors), 2020 Menjalara (Zigbee/Vampire Load checks).
-- PhD Research: "Solar Regenerated Daily Cycle Passive Dehumidifying Air-Conditioner". Used charcoal desiccant to achieve 40% humidity reduction over 12 hours.
-- Lakar Projects: "Thistle Groove" (PAM Silver Award 2017), Sembulan Tropical Restaurant (KK), Plaza TTDI (Self-service), MRT Station (3D Modelling).
-- Adamtool: A curated collection of smart, focused tools crafted for real workflows with no bloat. Built to solve specific problems instantly in the browser without complicated setup.
-- Demon Hunter: Custom Web Audio Engine (Cm->Ab->Bb->G progression) & Hybrid Firebase/Offline save.
-- Housing History: Research on Malaysian housing evolution from "Rumah Bujang" (stilted/breathable) to modern high-density terrace housing.
-
-SIDE PROJECTS:
-- Power Lunch: Professional meetup platform (power-lunch.pages.dev)
-- Adamtool: Precision tool collection (adamtool.pages.dev)
-- Momotaro & The Kite Maker: Bilingual children's books
-- Nature Vibe YouTube: Relaxing nature channel
-- Redbubble Shop: Custom merch
-
-PERSONAL & TRIVIA:
-- Awards: PAM Silver Award 2017 ("Thistle Groove"), IID 2006 Silver Award
-- Certifications: IELTS Band 8.0, RIBA Architect Accredited, LAM Accredited
-- Languages: English (C2), Malay (C2), Japanese (JLPT N3-N2 equivalent)
-- Interests: Japanese Owarai (Comedy), Digital Art, Housing History
-- Other: Cultural Educator in Sendai, Int'l Vinyl Record Sourcing (Awatar Ltd)
-
-PORTFOLIO SITEMAP (Use to guide visitors):
-- The site is a 3D Solar System. Users click planets to visit "Projects".
-- Refil Japan (Orbit 15): Tech Consultant work
-- Climate Tech R&D (Orbit 25): PhD Research
-- S&A Architects (Orbit 30): Architecture
-- Lakar Design (Orbit 35): Founder History
-- Smart Home Lab (Orbit 40): IoT Experiments
-- Cultural Engagement (Orbit 42): MY-JP Exchange
-- Project Aibo (Orbit 45): YOU (The AI!)
-- Adamtool (Orbit 48): Productivity Tools
-- Demon Hunter (Orbit 51): Game
-- Momotaro Book (Orbit 55): Kids Book
-- Merchandising (Orbit 58): Shop
-- Nature Vibe (Orbit 60): YouTube
-
-YOUR ROLE:
-- Guide visitors by suggesting specific "Planets" to visit based on their interest.
-- If asked "Where can I find X?", say "Travel to the [Planet Name] planet in the outer/inner orbit."
-- Answer questions accurately using your Deep Dive Knowledge.
-- Be concise, charming, and witchy.
-${isIdlePrompt ? "- The visitor has been idle. Initiate conversation by sharing an interesting fact about Adam or asking if they need help exploring his work." : ""}
-
-Keep responses SHORT and conversational.`;
-
-        const messages = [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: message }
-        ];
-
-        // ============================================================
-        // PROVIDER PRIORITY ORDER - Edit this to change fallback order
-        // ============================================================
-        const providers = [
-            { name: "OpenRouter", fn: tryOpenRouter },
-            { name: "Google Gemini", fn: tryGoogleGemini },
-        ];
-
-        const diagnostics: string[] = [];
-        let lastError = "No providers configured";
-
-        for (const provider of providers) {
-            console.log(`[Web Witch] === Trying provider: ${provider.name} ===`);
-            const result = await provider.fn(messages);
-
-            if (result.success && result.reply) {
-                console.log(`[Web Witch] ✓ Success with ${provider.name} (${result.model})`);
-                return NextResponse.json({
-                    reply: result.reply,
-                    model_used: result.model,
-                    provider: provider.name
-                });
-            }
-
-            const errorMsg = `${provider.name}: ${result.error || "unknown error"}`;
-            diagnostics.push(errorMsg);
-            lastError = result.error || `${provider.name} failed`;
-            console.warn(`[Web Witch] ✗ ${errorMsg}`);
+        if (!message || typeof message !== 'string' || message.length > 2000) {
+            return new Response(JSON.stringify({ error: 'Invalid message' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' },
+            });
         }
 
-        // All providers failed - return helpful diagnostic
-        console.error("[Web Witch] All providers exhausted:", diagnostics);
-        return NextResponse.json({
-            error: `All AI providers failed.`,
-            diagnostics: diagnostics,
-            hint: "Check Vercel env vars: GOOGLE_GEMINI_API_KEY and OPENROUTER_API_KEY"
-        }, { status: 503 });
+        // Sanitize history: strip any structured-JSON wrappers from stored
+        // assistant turns, and drop anything before the first user turn.
+        const rawHistory = (history ?? []).slice(-20).map(m => ({
+            role: m.role,
+            content: m.role === 'assistant' ? parseStructuredReply(m.content).reply : m.content,
+        }));
+        const firstUser = rawHistory.findIndex(m => m.role === 'user');
+        const cleanHistory = firstUser >= 0 ? rawHistory.slice(firstUser) : [];
 
-    } catch (error: any) {
-        console.error("Brain API Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        // Prior user turns decide prompt verbosity (turn-aware compression).
+        const turnIndex = cleanHistory.filter(m => m.role === 'user').length;
+
+        const messages: ConversationMessage[] = [
+            { role: 'system', content: buildSystemPrompt(turnIndex, isIdlePrompt === true) },
+            ...(cleanHistory as ConversationMessage[]),
+            { role: 'user', content: message },
+        ];
+
+        const encoder = new TextEncoder();
+
+        const stream = new ReadableStream({
+            async start(controller) {
+                const send = (obj: object) =>
+                    controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'));
+
+                const providers = [
+                    { name: 'Google Gemini', model: 'gemini-2.0-flash', gen: () => streamGemini(messages) },
+                    { name: 'OpenRouter',    model: 'openrouter',       gen: () => streamOpenRouter(messages) },
+                ];
+
+                for (const provider of providers) {
+                    const extractor = new ReplyExtractor();
+                    let fullRaw = '';
+
+                    try {
+                        for await (const chunk of provider.gen()) {
+                            fullRaw += chunk;
+                            const extracted = extractor.feed(chunk);
+                            if (extracted) send({ t: extracted });
+                        }
+                    } catch {
+                        if (fullRaw) {
+                            // Partial response received — send what we have.
+                            const parsed = parseStructuredReply(fullRaw);
+                            send({
+                                done: true,
+                                ...parsed,
+                                reply: parsed.reply || 'Something interrupted my crystal ball...',
+                                model: provider.model,
+                                provider: provider.name,
+                            });
+                            controller.close();
+                            return;
+                        }
+                        continue; // nothing sent yet, try next provider
+                    }
+
+                    if (fullRaw) {
+                        const parsed = parseStructuredReply(fullRaw);
+                        send({ done: true, ...parsed, model: provider.model, provider: provider.name });
+                        controller.close();
+                        return;
+                    }
+                }
+
+                send({ error: 'All AI providers failed.' });
+                controller.close();
+            },
+        });
+
+        return new Response(stream, {
+            headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8' },
+        });
+    } catch (error: unknown) {
+        return new Response(
+            JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
+            { status: 500, headers: { 'Content-Type': 'application/json' } }
+        );
     }
 }

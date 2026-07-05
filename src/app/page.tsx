@@ -13,6 +13,70 @@ interface Message {
   content: string;
 }
 
+// Final NDJSON frame from /api/brain — the full structured reply.
+interface BrainDone {
+  reply: string;
+  emotion?: string;
+  gesture?: string | null;
+  memorable?: string | null;
+  lang?: string;
+  model?: string;
+  provider?: string;
+}
+
+// POSTs to /api/brain and reads the NDJSON stream.
+// onToken receives the accumulated reply text as tokens arrive.
+async function streamBrain(
+  message: string,
+  history: Message[],
+  isIdlePrompt: boolean,
+  onToken: (textSoFar: string) => void
+): Promise<BrainDone> {
+  const response = await fetch('/api/brain', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, history, isIdlePrompt }),
+  });
+
+  if (!response.ok || !response.body) {
+    let detail = `HTTP ${response.status}`;
+    try {
+      const data = await response.json();
+      if (data.error) detail = data.error;
+    } catch { /* body wasn't JSON */ }
+    throw new Error(detail);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let streamed = '';
+  let done: BrainDone | null = null;
+
+  const handleLine = (line: string) => {
+    if (!line.trim()) return;
+    let ev: { t?: string; error?: string; done?: boolean } & BrainDone;
+    try { ev = JSON.parse(line); } catch { return; }
+    if (typeof ev.t === 'string') { streamed += ev.t; onToken(streamed); }
+    if (ev.error) throw new Error(ev.error);
+    if (ev.done) done = ev;
+  };
+
+  while (true) {
+    const { done: readerDone, value } = await reader.read();
+    if (readerDone) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop() ?? '';
+    for (const line of lines) handleLine(line);
+  }
+  if (buf) handleLine(buf);
+
+  if (done) return done;
+  if (streamed) return { reply: streamed };
+  throw new Error('Empty response from brain');
+}
+
 // Inner component that uses useSearchParams
 function HomeContent() {
   const searchParams = useSearchParams();
@@ -71,26 +135,15 @@ function HomeContent() {
     for (let attempt = 1; attempt <= 5; attempt++) {
       try {
         console.log(`[Web Witch] Connection attempt ${attempt}/5...`);
-        const response = await fetch('/api/brain', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: "Respond with ONLY: Ready.", isIdlePrompt: true })
-        });
-
-        const data = await response.json();
-        if (data.reply) {
+        const done = await streamBrain("Respond with ONLY: Ready.", [], true, () => {});
+        if (done.reply) {
           console.log("[Web Witch] AI connected! Starting voice check...");
           performVoiceCheck();
           return;
         }
-
-        if (data.error) {
-          console.warn(`[Web Witch] Attempt ${attempt} failed:`, data.error);
-          setStatus(`Gathering arcane energy... (${attempt}/5)`);
-          await new Promise(r => setTimeout(r, 1000 * attempt));
-        }
       } catch (err) {
-        console.error(`[Web Witch] Attempt ${attempt} network error:`, err);
+        console.warn(`[Web Witch] Attempt ${attempt} failed:`, err);
+        setStatus(`Gathering arcane energy... (${attempt}/5)`);
         await new Promise(r => setTimeout(r, 1000 * attempt));
       }
     }
@@ -185,28 +238,20 @@ function HomeContent() {
     // Fallback greeting when AI is unavailable
     const fallbackGreeting = "Greetings, traveler! I am Web Witch, mystical guide to Adam's digital realm. The cosmic energies are a bit unstable right now, but feel free to type your questions or use voice to summon my wisdom!";
 
-    // Fetch the real AI greeting
+    // Fetch the real AI greeting (streamed live into the chat)
     try {
-      const response = await fetch('/api/brain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: "Greet the visitor warmly. Introduce yourself as Web Witch and offer to help them explore Adam's portfolio.", isIdlePrompt: true })
-      });
-
-      const data = await response.json();
-      if (data.reply) {
-        setMessages([{ role: 'assistant', content: data.reply }]);
-        setStatus("Web Witch: " + data.reply.substring(0, 40) + "...");
-        speak(data.reply);
-        lastInteractionRef.current = Date.now();
-      } else {
-        // AI returned no reply - use fallback
-        console.warn("[Web Witch] No AI reply, using fallback greeting");
-        setMessages([{ role: 'assistant', content: fallbackGreeting }]);
-        setStatus("Web Witch is ready!");
-        speak(fallbackGreeting);
-        lastInteractionRef.current = Date.now();
-      }
+      const done = await streamBrain(
+        "Greet the visitor warmly. Introduce yourself as Web Witch and offer to help them explore Adam's portfolio.",
+        [],
+        true,
+        (textSoFar) => setMessages([{ role: 'assistant', content: textSoFar }])
+      );
+      const reply = done.reply || fallbackGreeting;
+      setMessages([{ role: 'assistant', content: reply }]);
+      setStatus("Web Witch: " + reply.substring(0, 40) + "...");
+      console.log("[Web Witch] greeting meta:", { emotion: done.emotion, gesture: done.gesture, lang: done.lang, model: done.model, provider: done.provider });
+      speak(reply);
+      lastInteractionRef.current = Date.now();
     } catch (err) {
       // Network error or 503 - use fallback greeting
       console.error("[Web Witch] Greeting fetch failed, using fallback:", err);
@@ -226,6 +271,9 @@ function HomeContent() {
 
     lastInteractionRef.current = Date.now(); // Reset idle timer
 
+    // Prior turns only — the current message goes in the `message` field.
+    const history = messages;
+
     // Add user message (unless idle prompt)
     if (!isIdle) {
       setMessages(prev => [...prev, { role: 'user', content: text }]);
@@ -234,21 +282,37 @@ function HomeContent() {
     setIsThinking(true);
     setStatus("Thinking...");
 
-    try {
-      const response = await fetch('/api/brain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, isIdlePrompt: isIdle })
+    // Streaming UI: append an assistant bubble on the first token,
+    // then keep replacing its content as tokens accumulate.
+    let assistantAdded = false;
+    const upsertAssistant = (content: string) => {
+      setMessages(prev => {
+        const next = prev.slice();
+        if (assistantAdded && next.length > 0 && next[next.length - 1].role === 'assistant') {
+          next[next.length - 1] = { role: 'assistant', content };
+        } else {
+          assistantAdded = true;
+          next.push({ role: 'assistant', content });
+        }
+        return next;
       });
+    };
 
-      const data = await response.json();
+    try {
+      const done = await streamBrain(text, history, isIdle, upsertAssistant);
+      const reply = done.reply || '';
 
-      if (data.reply) {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
-        setStatus("Web Witch: " + data.reply.substring(0, 40) + "...");
-        speak(data.reply);
+      if (reply) {
+        upsertAssistant(reply); // finalize with the canonical parsed reply
+        setStatus("Web Witch: " + reply.substring(0, 40) + "...");
+        // Phase 5 wires these into the avatar; Phase 3 uses lang for TTS voice.
+        console.log("[Web Witch] reply meta:", {
+          emotion: done.emotion, gesture: done.gesture, lang: done.lang,
+          memorable: done.memorable, model: done.model, provider: done.provider,
+        });
+        speak(reply);
       } else {
-        setStatus("Error: " + (data.error || "Unknown"));
+        setStatus("Error: empty reply");
       }
     } catch (err: any) {
       setStatus("Connection Error: " + err.message);
