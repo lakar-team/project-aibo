@@ -56,7 +56,7 @@ block is structured this way.
 
 <!-- wiki-chain
 id: project-aibo-claude
-status: Phases 0–2 shipped 2026-07-06 — security baseline, brain v2 (NDJSON streaming, history, {reply,emotion,gesture,memorable,lang}), and the model router: tier 0 reflexes (en/ja/ms) → tier 1/2 Gemini chains → tier 3 deep model, budget log + caps in Upstash (no-op until KV added), /api/stats, "consulting the deeper spirits…" transparency frames. diag field revealed GOOGLE_GEMINI_API_KEY is not set in prod — Adam to fix in Vercel (see PLAN.md STATE blockers). Next: Phase 3 (Kokoro TTS). Plan in PLAN.md.
+status: Phases 0–3 shipped 2026-07-06 — security baseline; brain v2 (NDJSON streaming, history, lang-first {lang,reply,emotion,gesture,memorable} contract); model router (tier 0 reflexes → Gemini chains → deep model, Upstash budget log, /api/stats); Kokoro worker TTS with per-language voices (browser fallback for unsupported langs), early {lang} frame for streamed sentence dispatch, audio-RMS lip sync. Prod env still missing GOOGLE_GEMINI_API_KEY + Upstash KV + OWNER_KEY (see PLAN.md STATE). Next: Phase 4 (Groq Whisper STT). Plan in PLAN.md.
 updated: 2026-07-06
 links: [project-aibo, ai-platforms-claude, vtube-claude]
 -->
