@@ -56,7 +56,7 @@ block is structured this way.
 
 <!-- wiki-chain
 id: project-aibo-claude
-status: Phases 0–1 shipped 2026-07-05 — security baseline (rate limit no-ops until Upstash KV added in Vercel; origin allowlist live), then brain v2: NDJSON streaming with history + turn-aware compression, structured {reply, emotion, gesture, memorable, lang} contract, personality.ts from Kip's PERSONALITY.md, adamProfile.ts from solar-punk. Verified live incl. Japanese mirror. Next: Phase 2 (model router + budget). Plan in PLAN.md.
-updated: 2026-07-05
+status: Phases 0–2 shipped 2026-07-06 — security baseline, brain v2 (NDJSON streaming, history, {reply,emotion,gesture,memorable,lang}), and the model router: tier 0 reflexes (en/ja/ms) → tier 1/2 Gemini chains → tier 3 deep model, budget log + caps in Upstash (no-op until KV added), /api/stats, "consulting the deeper spirits…" transparency frames. diag field revealed GOOGLE_GEMINI_API_KEY is not set in prod — Adam to fix in Vercel (see PLAN.md STATE blockers). Next: Phase 3 (Kokoro TTS). Plan in PLAN.md.
+updated: 2026-07-06
 links: [project-aibo, ai-platforms-claude, vtube-claude]
 -->

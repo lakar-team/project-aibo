@@ -143,11 +143,11 @@ verify on https://project-aibo.vercel.app; then update the STATE block in this f
 **Goal:** cheap-first routing with observable spend.
 **Files:** new `src/lib/router.ts`, `src/app/api/brain/route.ts`, new `src/app/api/stats/route.ts`.
 **Do:**
-- [ ] `router.ts`: `route(message, history) -> {tier: 0|1|2|3}`. Tier 0 reflex: regex for greetings/"stop"/time/date/"goodnight" → canned/instant handling, no LLM. Heuristics for 1 vs 2 vs 3: length, code/task verbs ("write", "debug", "plan", "explain in depth"), question complexity; when unsure, one cheap Tier-1 classification call returning `small|main|deep`.
-- [ ] Tier→model map (env-overridable): 1 = `gemini-2.0-flash-lite` (direct Gemini), 2 = `gemini-2.0-flash` → OpenRouter free rotation fallback, 3 = `OPENROUTER_DEEP_MODEL` env (default `deepseek/deepseek-r1:free`, Adam may set a paid Claude/GPT model later).
-- [ ] Log every call to Upstash: `LPUSH aibo:calls` JSON `{ts, tier, model, in_tokens_est, out_tokens_est}` + daily counters `aibo:budget:YYYY-MM-DD:tierN`. Soft caps from env (`BUDGET_TIER3_PER_DAY` default 20); when over cap, downgrade tier and have Web Witch say she's conserving her power today.
-- [ ] `GET /api/stats` (owner-key protected) returns today's counts per tier.
-- [ ] When Tier 3 engages, prepend a transparency flourish to status (client shows "consulting the deeper spirits…").
+- [x] `router.ts`: `route(message, history) -> {tier: 0|1|2|3}`. Tier 0 reflex: regex for greetings/"stop"/time/date/"goodnight" → canned/instant handling, no LLM. Heuristics for 1 vs 2 vs 3: length, code/task verbs ("write", "debug", "plan", "explain in depth"), question complexity; when unsure, one cheap Tier-1 classification call returning `small|main|deep`. *(Reflexes are multilingual — en/ja/ms; greeting reflex fires on turn 0 only so a mid-conversation "hi" stays contextual.)*
+- [x] Tier→model map (env-overridable): 1 = `gemini-2.0-flash-lite` (direct Gemini), 2 = `gemini-2.0-flash` → OpenRouter free rotation fallback, 3 = `OPENROUTER_DEEP_MODEL` env (default `deepseek/deepseek-r1:free`, Adam may set a paid Claude/GPT model later). *(2026-07-06: Gemini candidates are comma-separated env lists, 2.5-family first — `gemini-2.5-flash-lite`/`gemini-2.5-flash` then 2.0 fallbacks; OPENROUTER_DEEP_MODEL also accepts a comma-separated candidate list.)*
+- [x] Log every call to Upstash: `LPUSH aibo:calls` JSON `{ts, tier, model, in_tokens_est, out_tokens_est}` + daily counters `aibo:budget:YYYY-MM-DD:tierN`. Soft caps from env (`BUDGET_TIER3_PER_DAY` default 20); when over cap, downgrade tier and have Web Witch say she's conserving her power today. *(No-ops without KV envs, same as the rate limiter; cap=0 verified to force-downgrade with a "conserving" status frame.)*
+- [x] `GET /api/stats` (owner-key protected) returns today's counts per tier. *(503 until OWNER_KEY env exists; x-owner-key header or ?key=.)*
+- [x] When Tier 3 engages, prepend a transparency flourish to status (client shows "consulting the deeper spirits…"). *(NDJSON `{status:"deep"}` frame before tokens; page.tsx shows it in the nav status line.)*
 **Verify:** "hi" → tier 0/1 (check response metadata field `tier`); "write me a python script to rename files by date" → tier 3; `/api/stats` shows the counts; caps downgrade works (set cap to 0 temporarily).
 **Depends on:** Phase 1 (structured route), Phase 0 (Upstash).
 
@@ -231,10 +231,15 @@ verify on https://project-aibo.vercel.app; then update the STATE block in this f
 
 ## STATE — update before ending every session
 
-**Current phase:** Phase 1 ✅ complete (2026-07-05) → next is **Phase 2**
-**Last session:** 2026-07-05, Claude Fable 5 — Phases 0 and 1 shipped and verified live.
-Phase 0 commits: `d8a07b1` (phone number removed), `c6baaed` (rate limiting + origin allowlist + `.env.example`).
-Phase 1 commits: `0950b48` (brain v2 — solar-punk streaming machinery ported: Gemini SSE → OpenRouter stream fallback, `ReplyExtractor`, NDJSON, history, turnIndex prompt compression; contract extended to `{reply, emotion, gesture, memorable, lang}` with server-side validation; `src/data/personality.ts` + `src/data/adamProfile.ts`; `page.tsx` streams tokens live and logs reply meta), `8752e2d` (personality.ts re-adapted faithfully from Kip `docs/PERSONALITY.md`).
-Live verification: reply streams as `{t:}` frames; `memorable` extracted ("Hana keeps bees in Nagano."); multi-turn history recall works; Japanese in → Japanese out with `lang:"ja"`; Phase 0 gating intact (403 external).
-**Blockers:** (1) Rate limiting currently no-ops in prod — Adam must add the Upstash KV integration in the Vercel dashboard (creates `KV_REST_API_URL`/`KV_REST_API_TOKEN`); Phase 2 and 7 hard-depend on it. (2) Mirror still has no `.env.local` — Adam to paste `OPENROUTER_API_KEY` + `GOOGLE_GEMINI_API_KEY` into `%LOCALAPPDATA%\project-aibo-build\.env.local` for local chat testing. (3) Observation: all live replies are served by OpenRouter — the direct `streamGemini` path appears to fail silently (key or model-name issue?); fallback works, and Phase 2 rewrites the tier→model map, so investigate there.
+**Current phase:** Phase 2 ✅ complete (2026-07-06) → next is **Phase 3**
+**Last session:** 2026-07-06, Claude Fable 5 — Phase 2 shipped and verified live.
+Phase 2 commits: `647745d` (router tiers + budget log + `/api/stats` + transparency status frames + Gemini model-name fix + `diag` field), `ac6aed3` (cap=0 = never-tier-3; `OPENROUTER_DEEP_MODEL` accepts comma-separated candidates).
+Earlier: Phase 0 `d8a07b1`/`c6baaed`; Phase 1 `0950b48`/`8752e2d`.
+Live verification: "hi"/"こんにちは"/"what time is it"/"goodnight" → `tier:0` reflex, no LLM; "who is adam?" → `tier:1`; "write me a python script…"/"debug this…" → `tier:3` with `{status:"deep","Consulting the deeper spirits…"}` frame first; `BUDGET_TIER3_PER_DAY=0` → `{status:"conserving"}` + tier-2 chain (tested locally); `/api/stats` correctly 503s while OWNER_KEY is unset.
+**Blockers / Adam actions (all Vercel dashboard):**
+1. **`GOOGLE_GEMINI_API_KEY` is NOT visible in production** — the new `diag` field proved it: every Gemini attempt fails with "not configured". This was the real cause of Phase 1's "Gemini fails silently" (never a model-name problem). Check the env var exists for the Production environment under that exact name, then redeploy. Until then OpenRouter free rotation serves everything (works, but tier 1/2 have no Gemini and the router's classifier call also no-ops).
+2. Upstash KV integration still missing (`KV_REST_API_URL`/`KV_REST_API_TOKEN`) — rate limiting and budget logging both no-op; `/api/stats` will show zeros. Phase 7 hard-depends on it.
+3. Set `OWNER_KEY` to enable `/api/stats` (also used by Phase 7 owner mode).
+4. Both default deep models (`deepseek/deepseek-r1:free`, `deepseek/r1-0528:free`) currently fail on OpenRouter — tier 3 degrades to the free rotation (fine). Pick a live reasoning model on openrouter.ai/models and set `OPENROUTER_DEEP_MODEL`.
+5. Mirror still has no `.env.local` for local chat testing.
 **Decisions since plan:** 2026-07-04 — workflow changed from "local clone at C:\projects" to canonical Drive clone + build.ps1 mirror (see § 0 CRITICAL rules). This PLAN.md's canonical copy now lives at the project-aibo repo root (committed to git); the AIBO_Alive copy is stale. 2026-07-05 — `.env.example` lives at repo root (not `src/`); origin check parses the header with `new URL()` and compares exact origin/hostname (prevents `project-aibo.vercel.app.evil.com` prefix spoofing).
