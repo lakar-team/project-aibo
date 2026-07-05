@@ -1,4 +1,5 @@
 import { checkRateLimit } from '@/lib/ratelimit';
+import { isAllowedOrigin, clientIp } from '@/lib/origin';
 import { personality } from '@/data/personality';
 import { adamNarrative, siteMap } from '@/data/adamProfile';
 import {
@@ -10,35 +11,6 @@ import {
 import { logCall, tierCountToday, TIER3_DAILY_CAP } from '@/lib/budget';
 
 export const runtime = 'edge';
-
-// ============================================================
-// REQUEST GATING (Phase 0): origin allowlist + per-IP rate limit
-// ============================================================
-
-const ALLOWED_ORIGINS = [
-    'https://project-aibo.vercel.app',
-    'https://solar-punk-five.vercel.app',
-];
-
-function isAllowedOrigin(req: Request): boolean {
-    const raw = req.headers.get('origin') ?? req.headers.get('referer');
-    if (!raw) return false;
-    try {
-        const { origin, hostname } = new URL(raw);
-        if (ALLOWED_ORIGINS.includes(origin)) return true;
-        return hostname === 'localhost' || hostname === '127.0.0.1';
-    } catch {
-        return false;
-    }
-}
-
-function clientIp(req: Request): string {
-    return (
-        req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-        req.headers.get('x-real-ip') ||
-        'unknown'
-    );
-}
 
 // ============================================================
 // STRUCTURED REPLY CONTRACT
@@ -360,11 +332,15 @@ export async function POST(req: Request): Promise<Response> {
     }
 
     try {
-        const { message, history, isIdlePrompt } = await req.json() as {
+        const { message, history, isIdlePrompt, lang } = await req.json() as {
             message: string;
             history?: ConversationTurn[];
             isIdlePrompt?: boolean;
+            lang?: string; // detected STT language hint (ISO 639-1)
         };
+        const userLang = typeof lang === 'string' && /^[a-z]{2}$/i.test(lang.trim())
+            ? lang.trim().toLowerCase()
+            : null;
 
         if (!message || typeof message !== 'string' || message.length > 2000) {
             return new Response(JSON.stringify({ error: 'Invalid message' }), {
@@ -422,6 +398,9 @@ export async function POST(req: Request): Promise<Response> {
 
         const systemContent =
             buildSystemPrompt(turnIndex, isIdlePrompt === true) +
+            (userLang
+                ? `\nThe user is SPEAKING in the language with ISO code "${userLang}" (detected from their voice). Mirror it: reply in that language and set "lang" accordingly.`
+                : '') +
             (conserving
                 ? '\nNOTE: your deeper powers reached their daily budget, so you are conserving energy. If this question needed deep thought, briefly mention in character that you are conserving your power today.'
                 : '');

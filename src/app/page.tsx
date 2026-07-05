@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import type { VRM } from '@pixiv/three-vrm';
 import type { VrmViewerHandle } from '@/components/VrmViewer';
 import { useKokoroTTS, kokoroVoiceFor } from '@/hooks/useKokoroTTS';
+import { useMicrophone } from '@/hooks/useMicrophone';
 
 const VrmViewer = dynamic(() => import('@/components/VrmViewer'), { ssr: false });
 
@@ -34,12 +35,13 @@ async function streamBrain(
   isIdlePrompt: boolean,
   onToken: (textSoFar: string) => void,
   onStatus?: (text: string) => void,
-  onLang?: (lang: string) => void
+  onLang?: (lang: string) => void,
+  langHint?: string
 ): Promise<BrainDone> {
   const response = await fetch('/api/brain', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, history, isIdlePrompt }),
+    body: JSON.stringify({ message, history, isIdlePrompt, lang: langHint }),
   });
 
   if (!response.ok || !response.body) {
@@ -92,6 +94,7 @@ function HomeContent() {
 
   const [status, setStatus] = useState("Establishing connection...");
   const [isListening, setIsListening] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isThinking, setIsThinking] = useState(false);
@@ -302,7 +305,7 @@ function HomeContent() {
 
   // Idle auto-chat disabled — Web Witch only responds when prompted.
 
-  const sendMessage = async (text: string, isIdle = false) => {
+  const sendMessage = async (text: string, isIdle = false, langHint?: string) => {
     if (!text.trim()) return;
 
     lastInteractionRef.current = Date.now(); // Reset idle timer
@@ -387,7 +390,7 @@ function HomeContent() {
 
     try {
       // Status frames ("Consulting the deeper spirits…") land in the nav bar.
-      const done = await streamBrain(text, history, isIdle, onToken, setStatus, (l) => { replyLang = l; });
+      const done = await streamBrain(text, history, isIdle, onToken, setStatus, (l) => { replyLang = l; }, langHint);
       const reply = done.reply || '';
 
       if (reply) {
@@ -415,6 +418,64 @@ function HomeContent() {
     }
   };
 
+  // ---- Voice in (Phase 4): push-to-talk -> /api/stt (Groq Whisper) ----
+  const {
+    supported: micSupported,
+    recording,
+    startRecording,
+    stopRecording,
+  } = useMicrophone();
+  // Flips false after an STT failure so subsequent clicks use Web Speech.
+  const whisperEnabledRef = useRef(true);
+
+  const handleMicPress = async () => {
+    if (!micSupported || !whisperEnabledRef.current || recording || transcribing) return;
+    try {
+      await startRecording();
+      setStatus("Listening… (release to send, 30s max)");
+    } catch (err) {
+      console.warn("[Web Witch] Mic unavailable, falling back to Web Speech:", err);
+      whisperEnabledRef.current = false;
+      startListening();
+    }
+  };
+
+  const handleMicRelease = async () => {
+    if (!micSupported || !whisperEnabledRef.current) return;
+    const blob = await stopRecording();
+    if (!blob) return;
+    if (blob.size < 2000) {
+      setStatus("Too short — hold the mic while you speak");
+      return;
+    }
+
+    setTranscribing(true);
+    setStatus("Deciphering your words…");
+    try {
+      const formData = new FormData();
+      formData.append('audio', blob, 'speech.webm');
+      const res = await fetch('/api/stt', { method: 'POST', body: formData });
+      const data = await res.json() as { text?: string; language?: string; error?: string };
+
+      if (data.text && data.text.trim()) {
+        console.log(`[Web Witch] STT: "${data.text}" (${data.language})`);
+        await sendMessage(data.text.trim(), false, data.language);
+      } else if (data.error) {
+        console.warn("[Web Witch] STT unavailable, falling back to Web Speech:", data.error);
+        whisperEnabledRef.current = false;
+        setStatus("Whisper unavailable — using browser recognition. Tap the mic again.");
+      } else {
+        setStatus("Didn't catch that — try again?");
+      }
+    } catch (err: any) {
+      setStatus("Transcription failed: " + err.message);
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
+  // Web Speech API fallback (Chrome) — used when MediaRecorder or /api/stt
+  // is unavailable. Tap-to-talk rather than push-to-talk.
   const startListening = () => {
     // @ts-ignore
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -425,6 +486,7 @@ function HomeContent() {
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'en-US';
+    recognition.interimResults = false;
 
     recognition.onstart = () => {
       setIsListening(true);
@@ -622,13 +684,29 @@ function HomeContent() {
             )}
           </div>
 
-          {/* Voice Button Overlay */}
+          {/* Voice Button Overlay — hold to record (Whisper), tap for Web Speech fallback */}
           <button
-            onClick={startListening}
-            className={`absolute left-1/2 -translate-x-1/2 z-20 flex h-16 w-16 items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 ${isListening ? 'bg-red-500 animate-pulse' : 'bg-[#00f2ff] shadow-[0_0_30px_rgba(0,242,255,0.4)]'
+            onMouseDown={handleMicPress}
+            onMouseUp={handleMicRelease}
+            onMouseLeave={recording ? handleMicRelease : undefined}
+            onTouchStart={(e) => { e.preventDefault(); handleMicPress(); }}
+            onTouchEnd={(e) => { e.preventDefault(); handleMicRelease(); }}
+            onClick={() => {
+              // Only the fallback path uses click; Whisper path is press/release.
+              if (!micSupported || !whisperEnabledRef.current) startListening();
+            }}
+            title={micSupported && whisperEnabledRef.current ? 'Hold to talk' : 'Tap to talk'}
+            className={`absolute left-1/2 -translate-x-1/2 z-20 flex h-16 w-16 items-center justify-center rounded-full transition-all hover:scale-110 active:scale-95 select-none ${
+              recording || isListening
+                ? 'bg-red-500 animate-pulse'
+                : transcribing
+                  ? 'bg-amber-400'
+                  : 'bg-[#00f2ff] shadow-[0_0_30px_rgba(0,242,255,0.4)]'
               } ${isEmbedded ? 'bottom-24' : 'bottom-8'}`}
           >
-            <span className="text-2xl">{isListening ? '🔴' : '🎙️'}</span>
+            <span className={`text-2xl ${transcribing ? 'animate-spin' : ''}`}>
+              {recording || isListening ? '🔴' : transcribing ? '🌀' : '🎙️'}
+            </span>
           </button>
         </div>
 
