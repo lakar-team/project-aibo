@@ -279,7 +279,7 @@ function HomeContent() {
     setStatus("Link forged!");
 
     // Fallback greeting when AI is unavailable
-    const fallbackGreeting = "Greetings, traveler! I am Web Witch, mystical guide to Adam's digital realm. The cosmic energies are a bit unstable right now, but feel free to type your questions or use voice to summon my wisdom!";
+    const fallbackGreeting = "Greetings, traveler! I am Web Witch, your mystical companion. The cosmic energies are a bit unstable right now, but feel free to type or speak — I'm listening!";
 
     // Fetch the real AI greeting (streamed live into the chat)
     try {
@@ -327,14 +327,18 @@ function HomeContent() {
 
     // ---- Vision (Phase 6): capture one consented frame when invited ----
     let image: string | undefined;
-    if (!isIdle && camSupported && eyesModeRef.current !== 'off' && wantsVision(text)) {
+    const visionWanted = !isIdle && wantsVision(text);
+    console.log(`[Web Witch] vision check: wants=${visionWanted} camSupported=${camSupported} eyes=${eyesModeRef.current}`);
+    if (visionWanted && camSupported && eyesModeRef.current !== 'off') {
       const consented = visionConsentRef.current || await askVisionConsent();
+      console.log(`[Web Witch] vision consent: ${consented} (remembered=${visionConsentRef.current})`);
       if (consented) {
         visionConsentRef.current = true;
         try { localStorage.setItem('aibo:eyes-consent', 'granted'); } catch { /* ignore */ }
         setStatus("Opening the crystal eye…");
         try {
           image = await captureFrame(); // camera closes right after this
+          console.log(`[Web Witch] vision frame captured: ${image.length} base64 chars`);
         } catch (err) {
           // Browser permission denied (or no camera) — graceful spoken apology.
           console.warn("[Web Witch] camera unavailable:", err);
@@ -799,7 +803,7 @@ function HomeContent() {
                       onClick={() => {
                         console.log("[Web Witch] Summon bell pressed!");
                         setConnectionPhase('ready');
-                        const fallbackGreeting = "Greetings, traveler! I am Web Witch, mystical guide to Adam's digital realm. What knowledge do you seek?";
+                        const fallbackGreeting = "Greetings, traveler! I am Web Witch, your mystical companion. What's on your mind tonight?";
                         setMessages([{ role: 'assistant', content: fallbackGreeting }]);
                         setStatus("Web Witch is ready!");
                         speak(fallbackGreeting);

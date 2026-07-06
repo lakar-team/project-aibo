@@ -72,7 +72,7 @@ function matchReflex(msg: string, turnIndex: number): ReflexReply | null {
                 kind: 'greeting', lang: 'ja', emotion: 'happy', gesture: 'WAVE',
                 reply: pick([
                     'ようこそ、旅のお方！水晶玉はもう温まっているよ。何でも聞いてね。',
-                    'いらっしゃい！アダムのことなら、何でも聞いてね。',
+                    'いらっしゃい！今夜はどんな話をしようか？',
                 ]),
             };
         }
@@ -81,7 +81,7 @@ function matchReflex(msg: string, turnIndex: number): ReflexReply | null {
                 kind: 'greeting', lang: 'ms', emotion: 'happy', gesture: 'WAVE',
                 reply: pick([
                     'Selamat datang, pengembara! Bebola kristal saya sudah panas — tanyalah apa saja.',
-                    'Hai! Nak tahu apa-apa pasal Adam? Tanyalah.',
+                    'Hai! Apa cerita hari ini? Saya mendengar.',
                 ]),
             };
         }
