@@ -7,6 +7,8 @@ import type { VRM } from '@pixiv/three-vrm';
 import type { VrmViewerHandle } from '@/components/VrmViewer';
 import { useKokoroTTS, kokoroVoiceFor } from '@/hooks/useKokoroTTS';
 import { useMicrophone } from '@/hooks/useMicrophone';
+import { useWebcam } from '@/hooks/useWebcam';
+import { wantsVision } from '@/lib/vision';
 
 const VrmViewer = dynamic(() => import('@/components/VrmViewer'), { ssr: false });
 
@@ -36,12 +38,13 @@ async function streamBrain(
   onToken: (textSoFar: string) => void,
   onStatus?: (text: string) => void,
   onLang?: (lang: string) => void,
-  langHint?: string
+  langHint?: string,
+  image?: string
 ): Promise<BrainDone> {
   const response = await fetch('/api/brain', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, history, isIdlePrompt, lang: langHint }),
+    body: JSON.stringify({ message, history, isIdlePrompt, lang: langHint, image }),
   });
 
   if (!response.ok || !response.body) {
@@ -321,6 +324,30 @@ function HomeContent() {
       setMessages(prev => [...prev, { role: 'user', content: text }]);
     }
     setInputText("");
+
+    // ---- Vision (Phase 6): capture one consented frame when invited ----
+    let image: string | undefined;
+    if (!isIdle && camSupported && eyesModeRef.current !== 'off' && wantsVision(text)) {
+      const consented = visionConsentRef.current || await askVisionConsent();
+      if (consented) {
+        visionConsentRef.current = true;
+        try { localStorage.setItem('aibo:eyes-consent', 'granted'); } catch { /* ignore */ }
+        setStatus("Opening the crystal eye…");
+        try {
+          image = await captureFrame(); // camera closes right after this
+        } catch (err) {
+          // Browser permission denied (or no camera) — graceful spoken apology.
+          console.warn("[Web Witch] camera unavailable:", err);
+          const apology =
+            "I tried to open my crystal eye, but the window stayed shut — your browser wouldn't let me see. Ask me again once the camera is allowed, or just describe it to me.";
+          setMessages(prev => [...prev, { role: 'assistant', content: apology }]);
+          setStatus("Web Witch is ready!");
+          speakSmart(apology, 'en');
+          return; // the apology is the answer; no brain call without sight
+        }
+      }
+    }
+
     setIsThinking(true);
     setStatus("Thinking...");
 
@@ -393,7 +420,7 @@ function HomeContent() {
 
     try {
       // Status frames ("Consulting the deeper spirits…") land in the nav bar.
-      const done = await streamBrain(text, history, isIdle, onToken, setStatus, (l) => { replyLang = l; }, langHint);
+      const done = await streamBrain(text, history, isIdle, onToken, setStatus, (l) => { replyLang = l; }, langHint, image);
       const reply = done.reply || '';
 
       if (reply) {
@@ -421,6 +448,44 @@ function HomeContent() {
     } finally {
       setIsThinking(false);
     }
+  };
+
+  // ---- Eyes (Phase 6): consent-gated one-shot webcam vision ----
+  const { supported: camSupported, capturing: camActive, captureFrame } = useWebcam();
+  // 'on-ask-only' (default): camera only when the visitor invites a look.
+  // 'off': she never uses the camera, even when asked.
+  const [eyesMode, setEyesMode] = useState<'on-ask-only' | 'off'>('on-ask-only');
+  const eyesModeRef = useRef(eyesMode);
+  eyesModeRef.current = eyesMode;
+  const visionConsentRef = useRef(false); // granted once, remembered per browser
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('aibo:eyes') === 'off') setEyesMode('off');
+      if (localStorage.getItem('aibo:eyes-consent') === 'granted') visionConsentRef.current = true;
+    } catch { /* storage unavailable */ }
+  }, []);
+
+  const toggleEyes = () => {
+    setEyesMode(prev => {
+      const next = prev === 'off' ? 'on-ask-only' : 'off';
+      try { localStorage.setItem('aibo:eyes', next); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  // Promise-based consent dialog: sendMessage awaits the visitor's choice.
+  const [consentOpen, setConsentOpen] = useState(false);
+  const consentResolveRef = useRef<((ok: boolean) => void) | null>(null);
+  const askVisionConsent = (): Promise<boolean> =>
+    new Promise(resolve => {
+      consentResolveRef.current = resolve;
+      setConsentOpen(true);
+    });
+  const resolveConsent = (ok: boolean) => {
+    setConsentOpen(false);
+    consentResolveRef.current?.(ok);
+    consentResolveRef.current = null;
   };
 
   // ---- Voice in (Phase 4): push-to-talk -> /api/stt (Groq Whisper) ----
@@ -653,7 +718,22 @@ function HomeContent() {
         <div className="text-xl font-bold tracking-tighter text-white">
           PROJECT <span className="text-[#00f2ff]">AIBO</span>
         </div>
-        <div className="text-xs text-zinc-500">{status}</div>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={toggleEyes}
+            title={eyesMode === 'off'
+              ? 'Eyes OFF — she will never use the camera'
+              : 'Eyes on-ask-only — camera only when you invite her to look'}
+            className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+              eyesMode === 'off'
+                ? 'border-zinc-700 text-zinc-600 hover:text-zinc-400'
+                : 'border-[#00f2ff]/30 text-[#00f2ff]/80 hover:text-[#00f2ff]'
+            }`}
+          >
+            {eyesMode === 'off' ? '👁 eyes off' : '👁 eyes: on ask'}
+          </button>
+          <div className="text-xs text-zinc-500">{status}</div>
+        </div>
       </nav>
 
       {/* Voice model loading indicator (first Kokoro warmup) */}
@@ -750,6 +830,14 @@ function HomeContent() {
             )}
           </div>
 
+          {/* 👁 watching badge — visible only while the camera is open */}
+          {camActive && (
+            <div className="absolute top-20 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border border-red-400/50 bg-red-500/20 px-4 py-1.5 backdrop-blur-md">
+              <span className="animate-pulse text-base">👁</span>
+              <span className="text-xs uppercase tracking-widest text-red-300">watching</span>
+            </div>
+          )}
+
           {/* Voice Button Overlay — hold to record (Whisper), tap for Web Speech fallback */}
           <button
             onMouseDown={handleMicPress}
@@ -844,6 +932,34 @@ function HomeContent() {
           </div>
         </div>
       </main>
+
+      {/* Vision consent dialog — first camera use only (Kip § 4) */}
+      {consentOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="mx-4 max-w-sm rounded-2xl border border-[#00f2ff]/30 bg-[#0a0a12] p-6 text-center shadow-[0_0_60px_rgba(0,242,255,0.15)]">
+            <div className="mb-3 text-3xl">👁</div>
+            <h3 className="mb-2 font-semibold text-white">May I open my crystal eye?</h3>
+            <p className="mb-5 text-sm text-zinc-400">
+              I&apos;ll take a single glance through your camera to answer. The image is
+              looked at once and never stored — my eye closes the moment I&apos;m done.
+            </p>
+            <div className="flex justify-center gap-3">
+              <button
+                onClick={() => resolveConsent(true)}
+                className="rounded-full bg-[#00f2ff] px-5 py-2 font-semibold text-black transition-transform hover:scale-105"
+              >
+                Let her look
+              </button>
+              <button
+                onClick={() => resolveConsent(false)}
+                className="rounded-full bg-white/10 px-5 py-2 text-zinc-300 hover:bg-white/20"
+              >
+                Not now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dev Preview Button - Only visible when NOT embedded */}
       {!isEmbedded && (

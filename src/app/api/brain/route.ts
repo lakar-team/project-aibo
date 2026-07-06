@@ -184,7 +184,11 @@ Reply in the language the user wrote in.`;
 // STREAMING PROVIDERS — Gemini first, OpenRouter fallback
 // ============================================================
 
-async function* streamGemini(messages: ConversationMessage[], model: string): AsyncGenerator<string> {
+async function* streamGemini(
+    messages: ConversationMessage[],
+    model: string,
+    imageBase64?: string
+): AsyncGenerator<string> {
     const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
     if (!apiKey) throw new Error('GOOGLE_GEMINI_API_KEY not configured');
 
@@ -197,9 +201,17 @@ async function* streamGemini(messages: ConversationMessage[], model: string): As
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                contents: chatMessages.map(m => ({
+                contents: chatMessages.map((m, i) => ({
                     role: m.role === 'assistant' ? 'model' : 'user',
-                    parts: [{ text: m.content }],
+                    // Vision (Phase 6): the captured frame rides on the final
+                    // user turn only. It is forwarded and never stored.
+                    parts:
+                        imageBase64 && i === chatMessages.length - 1 && m.role === 'user'
+                            ? [
+                                  { text: m.content },
+                                  { inline_data: { mime_type: 'image/jpeg', data: imageBase64 } },
+                              ]
+                            : [{ text: m.content }],
                 })),
                 systemInstruction: sysMsg ? { parts: [{ text: sysMsg.content }] } : undefined,
                 generationConfig: { maxOutputTokens: 600, temperature: 0.85 },
@@ -332,15 +344,20 @@ export async function POST(req: Request): Promise<Response> {
     }
 
     try {
-        const { message, history, isIdlePrompt, lang } = await req.json() as {
+        const { message, history, isIdlePrompt, lang, image } = await req.json() as {
             message: string;
             history?: ConversationTurn[];
             isIdlePrompt?: boolean;
-            lang?: string; // detected STT language hint (ISO 639-1)
+            lang?: string;  // detected STT language hint (ISO 639-1)
+            image?: string; // base64 JPEG webcam frame (Phase 6) — never stored
         };
         const userLang = typeof lang === 'string' && /^[a-z]{2}$/i.test(lang.trim())
             ? lang.trim().toLowerCase()
             : null;
+        const userImage =
+            typeof image === 'string' && image.length > 100 && image.length < 4_500_000
+                ? image
+                : undefined;
 
         if (!message || typeof message !== 'string' || message.length > 2000) {
             return new Response(JSON.stringify({ error: 'Invalid message' }), {
@@ -366,8 +383,9 @@ export async function POST(req: Request): Promise<Response> {
         // ---- Phase 2: tier routing ----
         const decision = await decideTier(message, cleanHistory);
 
-        // Tier 0 reflex: canned reply, no LLM call at all.
-        if (decision.tier === 0 && decision.reflex) {
+        // Tier 0 reflex: canned reply, no LLM call at all. (Never when an
+        // image is attached — a glance always goes to the multimodal model.)
+        if (!userImage && decision.tier === 0 && decision.reflex) {
             const r = decision.reflex;
             await logCall({
                 tier: 0, model: 'reflex', provider: 'reflex',
@@ -428,40 +446,94 @@ export async function POST(req: Request): Promise<Response> {
             : tier === 3 ? [orDeep, ...GEMINI_MAIN_MODELS.map(gem), orFree]
             : [...GEMINI_MAIN_MODELS.map(gem), orFree];
 
+        // Vision (Phase 6): an image forces the multimodal Gemini chain,
+        // regardless of tier. If her sight fails entirely (key missing,
+        // models down), a "blind" text-only chain answers with an
+        // in-character apology instead of a hard error.
+        const visionChain: Provider[] = GEMINI_MAIN_MODELS.map(model => ({
+            name: 'Google Gemini',
+            model: `${model}+vision`,
+            gen: () => streamGemini(messages, model, userImage),
+        }));
+        const blindMessages: ConversationMessage[] = userImage
+            ? [
+                  {
+                      role: 'system',
+                      content:
+                          systemContent +
+                          '\nNOTE: the visitor invited you to look through the camera, but your sight failed this time (the vision spirits are unreachable). Briefly apologize in character and answer from their words alone.',
+                  },
+                  ...(cleanHistory as ConversationMessage[]),
+                  { role: 'user', content: message },
+              ]
+            : [];
+        const blindChain: Provider[] = userImage
+            ? [
+                  ...GEMINI_MAIN_MODELS.map(model => ({
+                      name: 'Google Gemini',
+                      model,
+                      gen: () => streamGemini(blindMessages, model),
+                  })),
+                  { name: 'OpenRouter', model: 'free-rotation', gen: () => streamOpenRouter(blindMessages) },
+              ]
+            : [];
+
         const stream = new ReadableStream({
             async start(controller) {
                 const send = (obj: object) =>
                     controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'));
 
                 // Kip's transparency rule: say when the deep mind wakes.
-                if (tier === 3) send({ status: 'deep', text: 'Consulting the deeper spirits…' });
+                if (tier === 3 && !userImage) send({ status: 'deep', text: 'Consulting the deeper spirits…' });
                 if (conserving) send({ status: 'conserving', text: 'Conserving my deeper powers today…' });
 
                 const diag: string[] = [];
 
-                for (const provider of providers) {
-                    const extractor = new ReplyExtractor();
-                    let fullRaw = '';
-                    let langSent = false;
+                // Runs one provider chain; returns true once a reply was sent.
+                const runChain = async (chain: Provider[]): Promise<boolean> => {
+                    for (const provider of chain) {
+                        const extractor = new ReplyExtractor();
+                        let fullRaw = '';
+                        let langSent = false;
 
-                    try {
-                        for await (const chunk of provider.gen()) {
-                            fullRaw += chunk;
-                            // "lang" precedes "reply" in the contract, so the
-                            // client learns the TTS voice before tokens arrive.
-                            if (!langSent) {
-                                const m = fullRaw.match(/"lang"\s*:\s*"([a-zA-Z]{2})/);
-                                if (m) { send({ lang: m[1].toLowerCase() }); langSent = true; }
+                        try {
+                            for await (const chunk of provider.gen()) {
+                                fullRaw += chunk;
+                                // "lang" precedes "reply" in the contract, so the
+                                // client learns the TTS voice before tokens arrive.
+                                if (!langSent) {
+                                    const m = fullRaw.match(/"lang"\s*:\s*"([a-zA-Z]{2})/);
+                                    if (m) { send({ lang: m[1].toLowerCase() }); langSent = true; }
+                                }
+                                const extracted = extractor.feed(chunk);
+                                if (extracted) send({ t: extracted });
                             }
-                            const extracted = extractor.feed(chunk);
-                            if (extracted) send({ t: extracted });
+                        } catch (err) {
+                            const errMsg = err instanceof Error ? err.message : String(err);
+                            diag.push(`${provider.name}(${provider.model}): ${errMsg.slice(0, 160)}`);
+                            console.warn(`[brain] provider failed — ${provider.name} ${provider.model}:`, errMsg);
+                            if (fullRaw) {
+                                // Partial response received — send what we have.
+                                const parsed = parseStructuredReply(fullRaw);
+                                await logCall({
+                                    tier, model: provider.model, provider: provider.name,
+                                    in_tokens_est: inTokensEst,
+                                    out_tokens_est: Math.ceil(fullRaw.length / 4),
+                                    reason: decision.reason,
+                                });
+                                send({
+                                    done: true,
+                                    ...parsed,
+                                    reply: parsed.reply || 'Something interrupted my crystal ball...',
+                                    tier, model: provider.model, provider: provider.name,
+                                    ...(diag.length ? { diag } : {}),
+                                });
+                                return true;
+                            }
+                            continue; // nothing sent yet, try next provider
                         }
-                    } catch (err) {
-                        const errMsg = err instanceof Error ? err.message : String(err);
-                        diag.push(`${provider.name}(${provider.model}): ${errMsg.slice(0, 160)}`);
-                        console.warn(`[brain] provider failed — ${provider.name} ${provider.model}:`, errMsg);
+
                         if (fullRaw) {
-                            // Partial response received — send what we have.
                             const parsed = parseStructuredReply(fullRaw);
                             await logCall({
                                 tier, model: provider.model, provider: provider.name,
@@ -470,37 +542,23 @@ export async function POST(req: Request): Promise<Response> {
                                 reason: decision.reason,
                             });
                             send({
-                                done: true,
-                                ...parsed,
-                                reply: parsed.reply || 'Something interrupted my crystal ball...',
-                                tier, model: provider.model, provider: provider.name,
+                                done: true, ...parsed, tier,
+                                model: provider.model, provider: provider.name,
                                 ...(diag.length ? { diag } : {}),
                             });
-                            controller.close();
-                            return;
+                            return true;
                         }
-                        continue; // nothing sent yet, try next provider
                     }
+                    return false;
+                };
 
-                    if (fullRaw) {
-                        const parsed = parseStructuredReply(fullRaw);
-                        await logCall({
-                            tier, model: provider.model, provider: provider.name,
-                            in_tokens_est: inTokensEst,
-                            out_tokens_est: Math.ceil(fullRaw.length / 4),
-                            reason: decision.reason,
-                        });
-                        send({
-                            done: true, ...parsed, tier,
-                            model: provider.model, provider: provider.name,
-                            ...(diag.length ? { diag } : {}),
-                        });
-                        controller.close();
-                        return;
-                    }
+                const answered = userImage
+                    ? (await runChain(visionChain)) || (await runChain(blindChain))
+                    : await runChain(providers);
+
+                if (!answered) {
+                    send({ error: 'All AI providers failed.', ...(diag.length ? { diag } : {}) });
                 }
-
-                send({ error: 'All AI providers failed.', ...(diag.length ? { diag } : {}) });
                 controller.close();
             },
         });

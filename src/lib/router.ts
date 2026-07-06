@@ -2,6 +2,8 @@
 // Tier 0: reflex (regex, no LLM). Tier 1: cheapest Gemini. Tier 2: main
 // Gemini → OpenRouter free rotation. Tier 3: deep model via OpenRouter.
 
+import { wantsVision } from '@/lib/vision';
+
 export type Tier = 0 | 1 | 2 | 3;
 
 // Tier→model map, env-overridable. Candidates are tried in order — this is
@@ -26,6 +28,8 @@ export interface RouteDecision {
     tier: Tier;
     reflex?: ReflexReply;
     reason: string;
+    /** Vision reflex (Phase 6): the message invites Web Witch to look. */
+    wantsVision: boolean;
 }
 
 const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
@@ -157,20 +161,24 @@ async function classify(msg: string): Promise<'small' | 'main' | 'deep' | null> 
 export async function decideTier(message: string, history?: { role: string }[]): Promise<RouteDecision> {
     const msg = message.trim();
     const turnIndex = (history ?? []).filter(m => m.role === 'user').length;
+    const vision = wantsVision(msg);
 
-    const reflex = matchReflex(msg, turnIndex);
-    if (reflex) return { tier: 0, reflex, reason: `reflex:${reflex.kind}` };
+    // Vision requests never short-circuit to a reflex — they need the LLM.
+    if (!vision) {
+        const reflex = matchReflex(msg, turnIndex);
+        if (reflex) return { tier: 0, reflex, reason: `reflex:${reflex.kind}`, wantsVision: false };
+    }
 
     const hasTask = TASK_VERBS.test(msg) || CODE_HINT.test(msg);
-    if (hasTask) return { tier: 3, reason: 'task-verb' };
-    if (msg.length > 600) return { tier: 3, reason: 'very-long' };
-    if (msg.length < 60) return { tier: 1, reason: 'short-chat' };
-    if (msg.length < 200) return { tier: 2, reason: 'default' };
+    if (hasTask) return { tier: 3, reason: 'task-verb', wantsVision: vision };
+    if (msg.length > 600) return { tier: 3, reason: 'very-long', wantsVision: vision };
+    if (msg.length < 60) return { tier: 1, reason: 'short-chat', wantsVision: vision };
+    if (msg.length < 200) return { tier: 2, reason: 'default', wantsVision: vision };
 
     // Ambiguous middle band (200–600 chars, no strong signal): one cheap
     // classification call; on failure fall back to the main tier.
     const cls = await classify(msg);
-    if (cls === 'small') return { tier: 1, reason: 'classifier:small' };
-    if (cls === 'deep') return { tier: 3, reason: 'classifier:deep' };
-    return { tier: 2, reason: cls ? 'classifier:main' : 'classifier-failed' };
+    if (cls === 'small') return { tier: 1, reason: 'classifier:small', wantsVision: vision };
+    if (cls === 'deep') return { tier: 3, reason: 'classifier:deep', wantsVision: vision };
+    return { tier: 2, reason: cls ? 'classifier:main' : 'classifier-failed', wantsVision: vision };
 }
