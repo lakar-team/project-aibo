@@ -121,6 +121,7 @@ function HomeContent() {
     ready: ttsReady,
     error: ttsError,
     getLevel: ttsGetLevel,
+    isSpeaking: kokoroSpeaking,
   } = useKokoroTTS();
 
   // warmup() on first user interaction — also satisfies the browser gesture
@@ -289,6 +290,8 @@ function HomeContent() {
       setMessages([{ role: 'assistant', content: reply }]);
       setStatus("Web Witch: " + reply.substring(0, 40) + "...");
       console.log("[Web Witch] greeting meta:", { emotion: done.emotion, gesture: done.gesture, lang: done.lang, model: done.model, provider: done.provider });
+      vrmViewerRef.current?.setEmotion(done.emotion);
+      vrmViewerRef.current?.playGesture(done.gesture);
       speakSmart(reply, done.lang ?? 'en');
       lastInteractionRef.current = Date.now();
     } catch (err) {
@@ -396,11 +399,13 @@ function HomeContent() {
       if (reply) {
         upsertAssistant(reply); // finalize with the canonical parsed reply
         setStatus("Web Witch: " + reply.substring(0, 40) + "...");
-        // Phase 5 wires emotion/gesture into the avatar.
         console.log("[Web Witch] reply meta:", {
           emotion: done.emotion, gesture: done.gesture, lang: done.lang,
           memorable: done.memorable, tier: done.tier, model: done.model, provider: done.provider,
         });
+        // Body language: face + gesture from the structured reply.
+        vrmViewerRef.current?.setEmotion(done.emotion);
+        vrmViewerRef.current?.playGesture(done.gesture);
 
         replyLang = done.lang ?? replyLang ?? 'en';
         if (streamVoice()) {
@@ -568,6 +573,67 @@ function HomeContent() {
       speak(text, lang);
     }
   };
+
+  // ---- Avatar state machine (Phase 5): mic/brain/TTS lifecycle → body ----
+  useEffect(() => {
+    const state = recording
+      ? 'listening'
+      : (transcribing || isThinking)
+        ? 'thinking'
+        : kokoroSpeaking
+          ? 'speaking'
+          : 'idle';
+    vrmViewerRef.current?.setAvatarState(state);
+  }, [recording, transcribing, isThinking, kokoroSpeaking]);
+
+  // ---- Idle free-will (Phase 5): client-side, no LLM calls ----
+  // After 60–120s of inactivity she does something small on her own.
+  // At most ONE spoken proactive line per session (config const below).
+  const MAX_PROACTIVE_LINES = 1;
+  const idleBusyRef = useRef(false);
+  idleBusyRef.current = recording || transcribing || isThinking || kokoroSpeaking;
+  const hasConversationRef = useRef(false);
+  hasConversationRef.current = messages.length > 0;
+  const proactiveCountRef = useRef(0);
+  const idleThresholdRef = useRef(60_000 + Math.random() * 60_000);
+  const speakSmartRef = useRef(speakSmart);
+  speakSmartRef.current = speakSmart;
+
+  useEffect(() => {
+    const IDLE_ACTIONS: Array<{ gesture?: string; emotion?: string }> = [
+      { gesture: 'THINK' },                      // ponder something
+      { gesture: 'NOD', emotion: 'happy' },      // remember something nice
+      { emotion: 'relaxed' },                    // soft smile
+      { gesture: 'DANCE', emotion: 'happy' },    // hum-sway to herself
+      { gesture: 'SHAKE', emotion: 'surprised' }, // shake off a daydream
+    ];
+    const PROACTIVE_LINES = [
+      { text: "Still there, traveler? My cauldron simmers quietly whenever you're ready.", lang: 'en' },
+      { text: 'まだそこにいる？聞きたいことができたら、いつでもどうぞ。', lang: 'ja' },
+      { text: 'Saya masih di sini — tanyalah kalau perlu apa-apa.', lang: 'ms' },
+    ];
+
+    const interval = setInterval(() => {
+      if (idleBusyRef.current || !hasConversationRef.current) return;
+      if (Date.now() - lastInteractionRef.current < idleThresholdRef.current) return;
+
+      lastInteractionRef.current = Date.now();
+      idleThresholdRef.current = 60_000 + Math.random() * 60_000;
+
+      const action = IDLE_ACTIONS[Math.floor(Math.random() * IDLE_ACTIONS.length)];
+      console.log('[Web Witch] idle free-will:', action);
+      if (action.gesture) vrmViewerRef.current?.playGesture(action.gesture);
+      if (action.emotion) vrmViewerRef.current?.setEmotion(action.emotion);
+
+      if (proactiveCountRef.current < MAX_PROACTIVE_LINES) {
+        proactiveCountRef.current++;
+        const line = PROACTIVE_LINES[Math.floor(Math.random() * PROACTIVE_LINES.length)];
+        setMessages(prev => [...prev, { role: 'assistant', content: line.text }]);
+        speakSmartRef.current(line.text, line.lang);
+      }
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

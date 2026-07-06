@@ -4,6 +4,7 @@ import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils, VRM } from '@pixiv/three-vrm';
+import { GestureEngine, type AvatarState } from '@/lib/gestures';
 
 interface VrmViewerProps {
     onLoaded?: (vrm: VRM) => void;
@@ -15,7 +16,19 @@ interface VrmViewerProps {
 export interface VrmViewerHandle {
     speakWithLipSync: (text: string) => void;
     setFacingDirection: (direction: 'front' | 'back') => void;
+    /** Show an emotion on the face (VRM preset name); eases in, decays after 6s. */
+    setEmotion: (emotion: string | null | undefined) => void;
+    /** Play a body gesture (WAVE/NOD/SHAKE/DANCE/BOW/CROSS_ARMS/THINK); unknown → ignored. */
+    playGesture: (gesture: string | null | undefined) => void;
+    /** Drive the avatar state machine: idle | listening | thinking | speaking. */
+    setAvatarState: (state: AvatarState) => void;
 }
+
+// VRM 1.0 expression presets a VRoid export ships with.
+const VALID_EMOTIONS = new Set(['happy', 'angry', 'sad', 'relaxed', 'surprised']);
+const EMOTION_WEIGHT = 0.7;
+const EMOTION_RAMP = 0.4;  // seconds ease in/out
+const EMOTION_HOLD = 6.0;  // seconds before decay starts
 
 const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded, isEmbedded, getAudioLevel }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -31,6 +44,11 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded, isEmb
     const onLoadedRef = useRef<VrmViewerProps['onLoaded']>(onLoaded);
     onLoadedRef.current = onLoaded;
 
+    // Body language engine (Phase 5) — owns all body-bone animation.
+    const engineRef = useRef<GestureEngine>(new GestureEngine());
+    // Active facial emotion: name + elapsed time (drives ease-in/hold/decay).
+    const emotionRef = useRef<{ name: string; timer: number } | null>(null);
+
     // Expose functions to parent
     useImperativeHandle(ref, () => ({
         speakWithLipSync: (text: string) => {
@@ -44,7 +62,22 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded, isEmb
             // 'front': face camera (rotation.y = Math.PI)
             // 'back': face away (rotation.y = 0)
             targetRotationRef.current = direction === 'front' ? Math.PI : 0;
-        }
+        },
+        setEmotion: (emotion) => {
+            const name = (emotion ?? '').toLowerCase();
+            const prev = emotionRef.current;
+            if (prev && prev.name !== name) {
+                // Snap the outgoing emotion off; the new one eases in.
+                vrmRef.current?.expressionManager?.setValue(prev.name, 0);
+            }
+            emotionRef.current = VALID_EMOTIONS.has(name) ? { name, timer: 0 } : null;
+        },
+        playGesture: (gesture) => {
+            engineRef.current.trigger(gesture);
+        },
+        setAvatarState: (state) => {
+            engineRef.current.setState(state);
+        },
     }));
 
     useEffect(() => {
@@ -122,42 +155,29 @@ const VrmViewer = forwardRef<VrmViewerHandle, VrmViewerProps>(({ onLoaded, isEmb
                     vrm.scene.rotation.y += rotationDiff * 0.05; // Smooth lerp factor
                 }
 
-                // === NATURAL BODY SWAY ===
-                // Gentle swaying motion using sine waves
-                const swayAmount = 0.02;
-                const swaySpeed = 0.5;
-                if (vrm.humanoid) {
-                    const spine = vrm.humanoid.getNormalizedBoneNode('spine');
-                    if (spine) {
-                        spine.rotation.z = Math.sin(elapsed * swaySpeed) * swayAmount;
-                        spine.rotation.x = Math.sin(elapsed * swaySpeed * 0.7) * swayAmount * 0.5;
-                    }
-                    const head = vrm.humanoid.getNormalizedBoneNode('head');
-                    if (head) {
-                        head.rotation.y = Math.sin(elapsed * swaySpeed * 0.3) * swayAmount * 0.5;
-                    }
+                // === BODY LANGUAGE (Phase 5) ===
+                // Rest pose, breathing, sway, avatar states, and gestures all
+                // live in the GestureEngine — one owner per bone.
+                engineRef.current.update(vrm, delta);
 
-                    // === ARM ANIMATIONS (fix T-pose) ===
-                    // Lower arms to a natural resting position
-                    const leftUpperArm = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
-                    const rightUpperArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
-                    const leftLowerArm = vrm.humanoid.getNormalizedBoneNode('leftLowerArm');
-                    const rightLowerArm = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
-
-                    if (leftUpperArm) {
-                        // Rest position + gentle sway
-                        leftUpperArm.rotation.z = 1.2 + Math.sin(elapsed * swaySpeed * 0.8) * 0.03;
-                        leftUpperArm.rotation.x = Math.sin(elapsed * swaySpeed * 0.5) * 0.02;
+                // === FACIAL EMOTION ===
+                // Ease in over 400ms, hold at 0.7, decay to neutral after 6s.
+                const emo = emotionRef.current;
+                if (emo) {
+                    emo.timer += delta;
+                    let weight: number;
+                    if (emo.timer < EMOTION_RAMP) {
+                        weight = (emo.timer / EMOTION_RAMP) * EMOTION_WEIGHT;
+                    } else if (emo.timer < EMOTION_HOLD) {
+                        weight = EMOTION_WEIGHT;
+                    } else if (emo.timer < EMOTION_HOLD + EMOTION_RAMP) {
+                        weight = (1 - (emo.timer - EMOTION_HOLD) / EMOTION_RAMP) * EMOTION_WEIGHT;
+                    } else {
+                        weight = 0;
                     }
-                    if (rightUpperArm) {
-                        rightUpperArm.rotation.z = -1.2 + Math.sin(elapsed * swaySpeed * 0.8 + 0.5) * 0.03;
-                        rightUpperArm.rotation.x = Math.sin(elapsed * swaySpeed * 0.5 + 0.3) * 0.02;
-                    }
-                    if (leftLowerArm) {
-                        leftLowerArm.rotation.y = -0.3 + Math.sin(elapsed * swaySpeed * 0.6) * 0.02;
-                    }
-                    if (rightLowerArm) {
-                        rightLowerArm.rotation.y = 0.3 + Math.sin(elapsed * swaySpeed * 0.6 + 0.2) * 0.02;
+                    vrm.expressionManager?.setValue(emo.name, Math.max(0, weight));
+                    if (weight <= 0) {
+                        emotionRef.current = null;
                     }
                 }
 
