@@ -245,7 +245,7 @@ Phase 2 live verification: "hi"/"こんにちは"/"what time is it"/"goodnight" 
 **Blockers / Adam actions (all Vercel dashboard):**
 0. **NEW (Phase 4):** create a free Groq key at console.groq.com and add `GROQ_API_KEY` — until then voice input silently falls back to browser Web Speech (Chrome-only, English).
 1. **`GOOGLE_GEMINI_API_KEY` is NOT visible in production** — the new `diag` field proved it: every Gemini attempt fails with "not configured". This was the real cause of Phase 1's "Gemini fails silently" (never a model-name problem). Check the env var exists for the Production environment under that exact name, then redeploy. Until then OpenRouter free rotation serves everything (works, but tier 1/2 have no Gemini and the router's classifier call also no-ops).
-2. Upstash KV integration still missing (`KV_REST_API_URL`/`KV_REST_API_TOKEN`) — rate limiting and budget logging both no-op; `/api/stats` will show zeros. Phase 7 hard-depends on it.
+2. ~~Upstash KV integration~~ **DONE 2026-07-06** — Adam provisioned it (Vercel naming, `KV_REST_API_URL`/`KV_REST_API_TOKEN`, which the code already used); redeploy `968a4de` picked it up. Verified live: burst of reflex requests → 429 after the 20/min window filled. Rate limiting + budget logging are now ACTIVE in prod. (`/api/stats` still needs OWNER_KEY, item 3.)
 3. Set `OWNER_KEY` to enable `/api/stats` (also used by Phase 7 owner mode).
 4. Both default deep models (`deepseek/deepseek-r1:free`, `deepseek/r1-0528:free`) currently fail on OpenRouter — tier 3 degrades to the free rotation (fine). Pick a live reasoning model on openrouter.ai/models and set `OPENROUTER_DEEP_MODEL`.
 5. Mirror still has no `.env.local` for local chat testing.
