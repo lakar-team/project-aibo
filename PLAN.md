@@ -188,10 +188,10 @@ verify on https://project-aibo.vercel.app; then update the STATE block in this f
 **Goal:** Web Witch can see the user when — and only when — invited.
 **Files:** new `src/hooks/useWebcam.ts`, edit `src/app/api/brain/route.ts`, `src/app/page.tsx`, `src/lib/router.ts`.
 **Do:**
-- [ ] `useWebcam.ts`: on demand `getUserMedia` video → grab frame to canvas → downscale longest side to 1024 px → JPEG q0.7 → base64. Stop the track immediately after capture (AIBO_Alive `vision_core.js` is the reference, 78 lines).
-- [ ] Router reflex: phrases like "can you see me / look at this / how do I look / what am I holding" (multilingual patterns) set `wantsVision=true` → client captures → sends `image` field to `/api/brain`.
-- [ ] Brain route: when `image` present, force the Gemini provider (multimodal `inline_data` part) regardless of tier; never store the image; if `memorable` is set on a vision reply, store only the text caption.
-- [ ] Consent UI (Kip § 4 exactly): first vision use asks permission with a visible dialog; a clear "👁 watching" badge shows whenever the camera is active; a settings toggle `eyes: on-ask-only` (default) / `off`.
+- [x] `useWebcam.ts`: on demand `getUserMedia` video → grab frame to canvas → downscale longest side to 1024 px → JPEG q0.7 → base64. Stop the track immediately after capture (AIBO_Alive `vision_core.js` is the reference, 78 lines).
+- [x] Router reflex: phrases like "can you see me / look at this / how do I look / what am I holding" (multilingual patterns) set `wantsVision=true` → client captures → sends `image` field to `/api/brain`. *(Patterns live in `src/lib/vision.ts` so the client can import them without pulling server code; router re-exposes via `RouteDecision.wantsVision`.)*
+- [x] Brain route: when `image` present, force the Gemini provider (multimodal `inline_data` part) regardless of tier; never store the image; if `memorable` is set on a vision reply, store only the text caption. *(Plus a "blind chain" beyond spec: if the whole vision chain fails — e.g. no Gemini key — a text-only chain answers with an in-character sight-failed apology instead of a hard error.)*
+- [x] Consent UI (Kip § 4 exactly): first vision use asks permission with a visible dialog; a clear "👁 watching" badge shows whenever the camera is active; a settings toggle `eyes: on-ask-only` (default) / `off`. *(Consent + mode persisted in localStorage; camera permission denied → spoken apology and no brain call.)*
 **Verify:** "how do I look?" → camera light blinks once, badge shows, she comments on what she sees; no camera activity on ordinary messages; browser permission denied → graceful spoken apology.
 **Depends on:** Phases 1–2.
 
@@ -231,8 +231,10 @@ verify on https://project-aibo.vercel.app; then update the STATE block in this f
 
 ## STATE — update before ending every session
 
-**Current phase:** Phase 5 ✅ complete (2026-07-06) → next is **Phase 6**
-**Last session:** 2026-07-06, Claude Fable 5 — Phases 2–5 shipped and verified.
+**Current phase:** Phase 6 ✅ complete (2026-07-06) → next is **Phase 7**
+**Last session:** 2026-07-06, Claude Fable 5 — Phases 2–6 shipped and verified.
+Phase 6 commit: `f848eb3` (one-shot `useWebcam` capture — 1024 px JPEG q0.7, track stopped immediately; multilingual `wantsVision()` in `src/lib/vision.ts`; brain `image` field forces the Gemini multimodal chain with a blind text-only fallback chain that apologizes in character; consent dialog + 👁 watching badge + eyes on-ask-only/off toggle, all persisted).
+Phase 6 verification: browser — "how do I look today?" → consent dialog → (no camera in test browser) graceful spoken apology with no brain call; eyes-off → vision phrase goes straight to the brain, no dialog/camera. Live — vision request walks `gemini-*+vision` first (diag) then the blind chain answers in character via OpenRouter ("my vision spirits are a bit hazy today"); ordinary messages untouched (reflex still fires). **Real end-to-end sight (camera → Gemini describing the frame) is blocked on `GOOGLE_GEMINI_API_KEY` in Vercel — once set, no code change needed; Adam should then test "how do I look?" with a real camera.**
 Phase 5 commit: `529281f` (`src/lib/gestures.ts` GestureEngine ported from AIBO_Alive motion_core.js — owns all body bones: rest/breath/sway + state offsets + WAVE/NOD/SHAKE/BOW/DANCE/CROSS_ARMS/THINK timelines; VrmViewer emotion overlay 0.7 weight, 400 ms ease, 6 s decay, plus setEmotion/playGesture/setAvatarState on the ref; page.tsx applies emotion+gesture from every done frame, runs the state machine off recording/transcribing/thinking/Kokoro-speaking, and idle free-will at 60–120 s with max one spoken multilingual proactive line per session).
 Phase 5 verification: live — sad message → `emotion:"sad"`, "goodbye" → `gesture:"WAVE"` in done frames; browser — full exchange with WAVE+happy ran zero-error through the new engine. **Gesture poses are mathematically plausible but untuned — Adam should eyeball WAVE/BOW/CROSS_ARMS/THINK in a real browser and report any weird limb angles.** Idle free-will logic reviewed but the 60–120 s wait wasn't observed end-to-end.
 Phase 4 commit: `fcf63cf` (push-to-talk `useMicrophone` hook — MediaRecorder webm/opus, 30 s cap; `/api/stt` edge route via groq-sdk `whisper-large-v3-turbo` verbose_json → `{text, language}` in ISO 639-1, origin+rate gated, graceful no-op without `GROQ_API_KEY`; shared `src/lib/origin.ts`; brain accepts a `lang` hint injected as a mirroring instruction; mic button hold-to-record with idle/recording/transcribing states and Web Speech fallback).
