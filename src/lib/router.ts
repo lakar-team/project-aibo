@@ -15,6 +15,10 @@ export const GEMINI_MAIN_MODELS = (process.env.GEMINI_MAIN_MODEL ?? 'gemini-2.5-
     .split(',').map(s => s.trim()).filter(Boolean);
 export const OPENROUTER_DEEP_MODELS = (process.env.OPENROUTER_DEEP_MODEL ?? 'deepseek/deepseek-r1:free,deepseek/r1-0528:free')
     .split(',').map(s => s.trim()).filter(Boolean);
+// Vision goes through OpenRouter (OPENROUTER_API_KEY is already set in prod).
+// Env-overridable, comma-separated candidates — e.g. google/gemini-flash-1.5-8b.
+export const VISION_MODELS = (process.env.VISION_MODEL ?? 'meta-llama/llama-3.2-11b-vision-instruct')
+    .split(',').map(s => s.trim()).filter(Boolean);
 
 export interface ReflexReply {
     kind: 'greeting' | 'stop' | 'time' | 'date' | 'goodnight';

@@ -284,7 +284,7 @@ function HomeContent() {
     // Fetch the real AI greeting (streamed live into the chat)
     try {
       const done = await streamBrain(
-        "Greet the visitor warmly. Introduce yourself as Web Witch and offer to help them explore Adam's portfolio.",
+        "Greet the visitor warmly. Introduce yourself as Web Witch, their mystical companion, and ask what's on their mind.",
         [],
         true,
         (textSoFar) => setMessages([{ role: 'assistant', content: textSoFar }])

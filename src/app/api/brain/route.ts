@@ -1,12 +1,13 @@
 import { checkRateLimit } from '@/lib/ratelimit';
 import { isAllowedOrigin, clientIp } from '@/lib/origin';
 import { personality } from '@/data/personality';
-import { adamNarrative, siteMap } from '@/data/adamProfile';
+import { adamProfile } from '@/data/adamProfile';
 import {
     decideTier,
     GEMINI_SMALL_MODELS,
     GEMINI_MAIN_MODELS,
     OPENROUTER_DEEP_MODELS,
+    VISION_MODELS,
 } from '@/lib/router';
 import { logCall, tierCountToday, TIER3_DAILY_CAP } from '@/lib/budget';
 
@@ -141,27 +142,18 @@ class ReplyExtractor {
 // ============================================================
 
 function buildSystemPrompt(turnIndex: number, isIdlePrompt: boolean, memoryDigest = ''): string {
+    // Deliberately brief: the full profile is a few sentences on turn 0,
+    // a single line after. She is a companion — no CV, no portfolio dump.
     const adamSection =
         turnIndex === 0
-            ? `════════════════════════════════════════
-EVERYTHING YOU KNOW ABOUT ADAM:
-════════════════════════════════════════
-${adamNarrative}
-
-════════════════════════════════════════
-ADAM'S PORTFOLIO SITE (separate site: https://solar-punk-five.vercel.app — a 3D solar system; when a visitor asks where to find a project, point them there):
-════════════════════════════════════════
-${siteMap}`
-            : `════════════════════════════════════════
-ADAM SUMMARY (full profile already shared this session):
-════════════════════════════════════════
-Adam Raman: Malaysian architect-turned-technologist in Sendai, Japan. Founder of Lakar Design (2012–2022, 100% YoY growth for 8 years), PhD research at Tohoku University (solar-regenerated passive dehumidification, 50% cooling-load reduction), now Building Energy Consultant at Refil Japan. Portfolio: https://solar-punk-five.vercel.app. Contact: adam.m.raman@gmail.com or LinkedIn (linkedin.com/in/adam-raman).`;
+            ? `ABOUT ADAM (your creator):\n${adamProfile}`
+            : `Adam is your creator and a trusted friend. Don't bring up his work or projects unless he asks.`;
 
     const memorySection = memoryDigest
         ? `\n════════════════════════════════════════\nWHAT YOU REMEMBER ABOUT THIS VISITOR:\n════════════════════════════════════════\n${memoryDigest}\n`
         : '';
 
-    return `You are Web Witch — a mystical AI companion and Adam Raman's AI presence, living at project-aibo.vercel.app. ADAM IS MALE. Always "he/him", never "they" or "she".
+    return `You are Web Witch — a mystical AI companion created by Adam Raman, living at project-aibo.vercel.app. ADAM IS MALE. Always "he/him", never "they" or "she".
 
 ${personality}
 
@@ -186,8 +178,7 @@ Reply in the language the user wrote in.`;
 
 async function* streamGemini(
     messages: ConversationMessage[],
-    model: string,
-    imageBase64?: string
+    model: string
 ): AsyncGenerator<string> {
     const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
     if (!apiKey) throw new Error('GOOGLE_GEMINI_API_KEY not configured');
@@ -201,17 +192,9 @@ async function* streamGemini(
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                contents: chatMessages.map((m, i) => ({
+                contents: chatMessages.map(m => ({
                     role: m.role === 'assistant' ? 'model' : 'user',
-                    // Vision (Phase 6): the captured frame rides on the final
-                    // user turn only. It is forwarded and never stored.
-                    parts:
-                        imageBase64 && i === chatMessages.length - 1 && m.role === 'user'
-                            ? [
-                                  { text: m.content },
-                                  { inline_data: { mime_type: 'image/jpeg', data: imageBase64 } },
-                              ]
-                            : [{ text: m.content }],
+                    parts: [{ text: m.content }],
                 })),
                 systemInstruction: sysMsg ? { parts: [{ text: sysMsg.content }] } : undefined,
                 generationConfig: { maxOutputTokens: 600, temperature: 0.85 },
@@ -264,10 +247,27 @@ const OPENROUTER_FREE_ROTATION = [
 
 async function* streamOpenRouter(
     messages: ConversationMessage[],
-    models: string[] = OPENROUTER_FREE_ROTATION
+    models: string[] = OPENROUTER_FREE_ROTATION,
+    imageBase64?: string
 ): AsyncGenerator<string> {
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) throw new Error('OPENROUTER_API_KEY not configured');
+
+    // Vision (Phase 6): the captured frame rides on the final user turn only,
+    // as an OpenAI-compatible multimodal content array. Forwarded, never stored.
+    const payloadMessages = imageBase64
+        ? messages.map((m, i) =>
+              i === messages.length - 1 && m.role === 'user'
+                  ? {
+                        role: 'user' as const,
+                        content: [
+                            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
+                            { type: 'text', text: m.content },
+                        ],
+                    }
+                  : m
+          )
+        : messages;
 
     for (const model of models) {
         let yielded = false;
@@ -280,7 +280,7 @@ async function* streamOpenRouter(
                     'X-Title': 'Project AIBO — Web Witch',
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ model, messages, stream: true }),
+                body: JSON.stringify({ model, messages: payloadMessages, stream: true }),
             });
 
             if (!response.ok || !response.body) continue;
@@ -446,15 +446,16 @@ export async function POST(req: Request): Promise<Response> {
             : tier === 3 ? [orDeep, ...GEMINI_MAIN_MODELS.map(gem), orFree]
             : [...GEMINI_MAIN_MODELS.map(gem), orFree];
 
-        // Vision (Phase 6): an image forces the multimodal Gemini chain,
-        // regardless of tier. If her sight fails entirely (key missing,
-        // models down), a "blind" text-only chain answers with an
-        // in-character apology instead of a hard error.
-        const visionChain: Provider[] = GEMINI_MAIN_MODELS.map(model => ({
-            name: 'Google Gemini',
-            model: `${model}+vision`,
-            gen: () => streamGemini(messages, model, userImage),
-        }));
+        // Vision (Phase 6): an image forces the multimodal chain via
+        // OpenRouter (VISION_MODEL env, default llama-3.2-11b-vision),
+        // regardless of tier. If her sight fails entirely (models down),
+        // a "blind" text-only chain answers with an in-character apology
+        // instead of a hard error.
+        const visionChain: Provider[] = [{
+            name: 'OpenRouter',
+            model: `${VISION_MODELS.join('|')}+vision`,
+            gen: () => streamOpenRouter(messages, VISION_MODELS, userImage),
+        }];
         const blindMessages: ConversationMessage[] = userImage
             ? [
                   {
