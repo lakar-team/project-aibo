@@ -1,5 +1,11 @@
 {
     "framework": "nextjs",
     "buildCommand": "npm run build",
-    "outputDirectory": ".next"
+    "outputDirectory": ".next",
+    "crons": [
+        {
+            "path": "/api/sleep?all=owner",
+            "schedule": "0 15 * * *"
+        }
+    ]
 }

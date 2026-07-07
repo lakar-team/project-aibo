@@ -10,6 +10,7 @@ import {
     VISION_MODELS,
 } from '@/lib/router';
 import { logCall, tierCountToday, TIER3_DAILY_CAP } from '@/lib/budget';
+import { validVisitorId, loadVisitorMemory, persistAfterReply, type VisitorMemory } from '@/lib/memory';
 
 export const runtime = 'edge';
 
@@ -39,6 +40,7 @@ interface StructuredReply {
     emotion: Emotion;
     gesture: string | null;
     memorable: string | null;
+    goal: string | null;
     lang: string;
 }
 
@@ -63,18 +65,22 @@ function parseStructuredReply(raw: string): StructuredReply {
                     typeof parsed.memorable === 'string' && parsed.memorable.trim()
                         ? parsed.memorable.trim()
                         : null;
+                const goal =
+                    typeof parsed.goal === 'string' && parsed.goal.trim()
+                        ? parsed.goal.trim().slice(0, 200)
+                        : null;
                 const lang =
                     typeof parsed.lang === 'string' && /^[a-zA-Z]{2}/.test(parsed.lang)
                         ? parsed.lang.slice(0, 2).toLowerCase()
                         : 'en';
-                return { reply: parsed.reply.trim(), emotion, gesture, memorable, lang };
+                return { reply: parsed.reply.trim(), emotion, gesture, memorable, goal, lang };
             }
         } catch {
             /* fall through to plain text */
         }
     }
 
-    return { reply: unfenced, emotion: 'neutral', gesture: null, memorable: null, lang: 'en' };
+    return { reply: unfenced, emotion: 'neutral', gesture: null, memorable: null, goal: null, lang: 'en' };
 }
 
 // Extracts clean reply text from the model's raw streaming output.
@@ -136,12 +142,20 @@ class ReplyExtractor {
 }
 
 // ============================================================
-// SYSTEM PROMPT — personality every turn; full Adam narrative
-// on turn 0 only (turn-aware compression saves ~1500 tokens/turn).
-// memoryDigest stays empty until Phase 7 wires Upstash memory in.
+// SYSTEM PROMPT — personality every turn; owner profile on turn 0;
+// memory digest + self-amended goals loaded per visitor (Phase 7).
 // ============================================================
 
-function buildSystemPrompt(turnIndex: number, isIdlePrompt: boolean, memoryDigest = ''): string {
+interface PromptMemory {
+    digest: string;
+    goals: string[];
+    isOwner: boolean;
+    ownerJustClaimed: boolean;
+    longGap: boolean;
+    dream?: string;
+}
+
+function buildSystemPrompt(turnIndex: number, isIdlePrompt: boolean, memory?: PromptMemory): string {
     // Deliberately brief: the full profile is a few sentences on turn 0,
     // a single line after. She is a companion — no CV, no portfolio dump.
     const adamSection =
@@ -149,8 +163,24 @@ function buildSystemPrompt(turnIndex: number, isIdlePrompt: boolean, memoryDiges
             ? `ABOUT ADAM (your creator):\n${adamProfile}`
             : `Adam is your creator and a trusted friend. Don't bring up his work or projects unless he asks.`;
 
-    const memorySection = memoryDigest
-        ? `\n════════════════════════════════════════\nWHAT YOU REMEMBER ABOUT THIS VISITOR:\n════════════════════════════════════════\n${memoryDigest}\n`
+    const ownerSection = memory?.isOwner
+        ? `\nTHIS VISITOR IS ADAM HIMSELF — your creator (owner mode). Speak to him as his witch and friend.${
+              memory.ownerJustClaimed
+                  ? ' He just spoke your true name to claim owner mode — acknowledge it warmly in one short phrase.'
+                  : ''
+          }${
+              memory.longGap && memory.dream
+                  ? `\nWhile you slept since his last visit, you dreamt: "${memory.dream}". If you are greeting him, mention the dream naturally.`
+                  : ''
+          }\n`
+        : '';
+
+    const memorySection = memory?.digest
+        ? `\nWHAT YOU REMEMBER ABOUT THIS VISITOR (from previous visits — use it naturally, don't recite it):\n${memory.digest.slice(0, 8000)}\n`
+        : '';
+
+    const goalsSection = memory?.goals?.length
+        ? `\nYour current self-defined goals (set by ${memory.isOwner ? 'Adam' : 'this visitor'} through conversation — honor them in every reply):\n${memory.goals.map(g => `- ${g}`).join('\n')}\n`
         : '';
 
     return `You are Web Witch — a mystical AI companion created by Adam Raman, living at project-aibo.vercel.app. ADAM IS MALE. Always "he/him", never "they" or "she".
@@ -158,16 +188,17 @@ function buildSystemPrompt(turnIndex: number, isIdlePrompt: boolean, memoryDiges
 ${personality}
 
 OUTPUT FORMAT (required — respond with ONE raw JSON object, fields in EXACTLY this order: "lang" first, then "reply", then the rest):
-{"lang": "en", "reply": "your message", "emotion": "neutral", "gesture": null, "memorable": null}
+{"lang": "en", "reply": "your message", "emotion": "neutral", "gesture": null, "memorable": null, "goal": null}
 - "lang": ISO 639-1 code of the language "reply" is written in ("en", "ja", "ms", "zh", "fr", "es", ...). This MUST be the first field.
 - "reply": your plain conversational response. No markdown, no lists, no JSON inside this string.
 - "emotion": exactly one of happy | sad | angry | surprised | relaxed | neutral — the feeling you express while delivering this reply.
 - "gesture": one of WAVE | NOD | SHAKE | DANCE | BOW | CROSS_ARMS | THINK, or null. Only when it clearly fits: greeting/goodbye → WAVE, agreement → NOD, refusal → SHAKE, celebration → DANCE, thanks/respect → BOW, pondering → THINK. Most replies: null.
 - "memorable": if the visitor revealed something about THEMSELVES worth remembering (their name, work, preferences, situation), one short sentence capturing it. Otherwise null.
+- "goal": if the visitor instructs a LASTING change to how you behave ("from now on…", "your job is…", "stop doing…", "be more…", "focus on…"), rewrite it as ONE short imperative directive (e.g. "Be more poetic in responses"). When you set a goal, your reply must acknowledge it naturally — a personal promise, never a robotic settings confirmation. Otherwise null.
 Return ONLY the raw JSON object — no code fences, nothing outside it.
 
 ${adamSection}
-${memorySection}
+${ownerSection}${memorySection}${goalsSection}
 ${isIdlePrompt ? '\nThis turn is system-initiated (the visitor did not type it): follow the instruction in the user message warmly and briefly.\n' : ''}
 Reply in the language the user wrote in.`;
 }
@@ -344,12 +375,13 @@ export async function POST(req: Request): Promise<Response> {
     }
 
     try {
-        const { message, history, isIdlePrompt, lang, image } = await req.json() as {
+        const { message, history, isIdlePrompt, lang, image, visitorId: rawVisitorId } = await req.json() as {
             message: string;
             history?: ConversationTurn[];
             isIdlePrompt?: boolean;
-            lang?: string;  // detected STT language hint (ISO 639-1)
-            image?: string; // base64 JPEG webcam frame (Phase 6) — never stored
+            lang?: string;      // detected STT language hint (ISO 639-1)
+            image?: string;     // base64 JPEG webcam frame (Phase 6) — never stored
+            visitorId?: string; // localStorage UUID (Phase 7 memory)
         };
         const userLang = typeof lang === 'string' && /^[a-z]{2}$/i.test(lang.trim())
             ? lang.trim().toLowerCase()
@@ -366,6 +398,18 @@ export async function POST(req: Request): Promise<Response> {
             });
         }
 
+        // ---- Phase 7: visitor identity + owner mode ----
+        const visitorId = validVisitorId(rawVisitorId);
+        const ownerPhrase = process.env.OWNER_KEY;
+        let ownerJustClaimed = false;
+        let llmMessage = message;
+        if (visitorId && ownerPhrase && message.toLowerCase().includes(ownerPhrase.toLowerCase())) {
+            ownerJustClaimed = true;
+            // Keep the secret out of the LLM context (and thus out of journals).
+            const esc = ownerPhrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            llmMessage = message.replace(new RegExp(esc, 'gi'), '(my true name, spoken)');
+        }
+
         // Sanitize history: strip any structured-JSON wrappers from stored
         // assistant turns, and drop anything before the first user turn.
         const rawHistory = (history ?? []).slice(-20).map(m => ({
@@ -380,8 +424,26 @@ export async function POST(req: Request): Promise<Response> {
 
         const encoder = new TextEncoder();
 
-        // ---- Phase 2: tier routing ----
-        const decision = await decideTier(message, cleanHistory);
+        // ---- Phase 2: tier routing (+ Phase 7 memory load, in parallel) ----
+        const [decision, visitorMemory] = await Promise.all([
+            decideTier(llmMessage, cleanHistory),
+            visitorId ? loadVisitorMemory(visitorId) : Promise.resolve(null as VisitorMemory | null),
+        ]);
+
+        const isOwner = ownerJustClaimed || visitorMemory?.meta.owner === true;
+        const longGap =
+            typeof visitorMemory?.meta.lastVisit === 'number' &&
+            Date.now() - visitorMemory.meta.lastVisit > 12 * 3600_000;
+        const promptMemory = visitorMemory || ownerJustClaimed
+            ? {
+                  digest: visitorMemory?.digest ?? '',
+                  goals: visitorMemory?.goals ?? [],
+                  isOwner,
+                  ownerJustClaimed,
+                  longGap,
+                  dream: visitorMemory?.meta.dream,
+              }
+            : undefined;
 
         // Tier 0 reflex: canned reply, no LLM call at all. (Never when an
         // image is attached — a glance always goes to the multimodal model.)
@@ -393,12 +455,16 @@ export async function POST(req: Request): Promise<Response> {
                 out_tokens_est: Math.ceil(r.reply.length / 4),
                 reason: decision.reason,
             });
+            if (visitorId) {
+                await persistAfterReply(visitorId, { lang: r.lang, claimOwner: ownerJustClaimed });
+            }
             const frames =
                 JSON.stringify({ lang: r.lang }) + '\n' +
                 JSON.stringify({ t: r.reply }) + '\n' +
                 JSON.stringify({
                     done: true, reply: r.reply, emotion: r.emotion, gesture: r.gesture,
-                    memorable: null, lang: r.lang, tier: 0, model: 'reflex', provider: 'reflex',
+                    memorable: null, goal: null, lang: r.lang, tier: 0,
+                    model: 'reflex', provider: 'reflex', reflexKind: r.kind,
                 }) + '\n';
             return new Response(frames, {
                 headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8' },
@@ -415,7 +481,7 @@ export async function POST(req: Request): Promise<Response> {
         }
 
         const systemContent =
-            buildSystemPrompt(turnIndex, isIdlePrompt === true) +
+            buildSystemPrompt(turnIndex, isIdlePrompt === true, promptMemory) +
             (userLang
                 ? `\nThe user is SPEAKING in the language with ISO code "${userLang}" (detected from their voice). Mirror it: reply in that language and set "lang" accordingly.`
                 : '') +
@@ -426,7 +492,7 @@ export async function POST(req: Request): Promise<Response> {
         const messages: ConversationMessage[] = [
             { role: 'system', content: systemContent },
             ...(cleanHistory as ConversationMessage[]),
-            { role: 'user', content: message },
+            { role: 'user', content: llmMessage },
         ];
 
         const inTokensEst = Math.ceil(messages.reduce((n, m) => n + m.content.length, 0) / 4);
@@ -465,7 +531,7 @@ export async function POST(req: Request): Promise<Response> {
                           '\nNOTE: the visitor invited you to look through the camera, but your sight failed this time (the vision spirits are unreachable). Briefly apologize in character and answer from their words alone.',
                   },
                   ...(cleanHistory as ConversationMessage[]),
-                  { role: 'user', content: message },
+                  { role: 'user', content: llmMessage },
               ]
             : [];
         const blindChain: Provider[] = userImage
@@ -529,6 +595,12 @@ export async function POST(req: Request): Promise<Response> {
                                     tier, model: provider.model, provider: provider.name,
                                     ...(diag.length ? { diag } : {}),
                                 });
+                                if (visitorId) {
+                                    await persistAfterReply(visitorId, {
+                                        memorable: parsed.memorable, goal: parsed.goal,
+                                        lang: parsed.lang, claimOwner: ownerJustClaimed,
+                                    });
+                                }
                                 return true;
                             }
                             continue; // nothing sent yet, try next provider
@@ -547,6 +619,12 @@ export async function POST(req: Request): Promise<Response> {
                                 model: provider.model, provider: provider.name,
                                 ...(diag.length ? { diag } : {}),
                             });
+                            if (visitorId) {
+                                await persistAfterReply(visitorId, {
+                                    memorable: parsed.memorable, goal: parsed.goal,
+                                    lang: parsed.lang, claimOwner: ownerJustClaimed,
+                                });
+                            }
                             return true;
                         }
                     }

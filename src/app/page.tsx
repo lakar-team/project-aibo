@@ -23,10 +23,27 @@ interface BrainDone {
   emotion?: string;
   gesture?: string | null;
   memorable?: string | null;
+  goal?: string | null;
   lang?: string;
   tier?: number;
   model?: string;
   provider?: string;
+  reflexKind?: string;
+}
+
+// Stable per-browser identity for memory (Phase 7).
+function getVisitorId(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  try {
+    let id = localStorage.getItem('aibo:visitor');
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem('aibo:visitor', id);
+    }
+    return id;
+  } catch {
+    return undefined; // storage blocked — she just won't remember this visit
+  }
 }
 
 // POSTs to /api/brain and reads the NDJSON stream.
@@ -44,7 +61,7 @@ async function streamBrain(
   const response = await fetch('/api/brain', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, history, isIdlePrompt, lang: langHint, image }),
+    body: JSON.stringify({ message, history, isIdlePrompt, lang: langHint, image, visitorId: getVisitorId() }),
   });
 
   if (!response.ok || !response.body) {
@@ -112,6 +129,36 @@ function HomeContent() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastInteractionRef = useRef<number>(Date.now());
+
+  // ---- Sleeping memory triggers (Phase 7) ----
+  // True once anything memorable/goal-worthy happened this session; the
+  // tab-hide beacon only fires when there is actually something to dream on.
+  const journalDirtyRef = useRef(false);
+
+  const triggerSleep = (viaBeacon: boolean) => {
+    const id = getVisitorId();
+    if (!id) return;
+    journalDirtyRef.current = false;
+    const payload = JSON.stringify({ visitorId: id });
+    if (viaBeacon && navigator.sendBeacon) {
+      navigator.sendBeacon('/api/sleep', payload);
+    } else {
+      fetch('/api/sleep', { method: 'POST', body: payload, keepalive: true })
+        .then(r => r.json())
+        .then(d => console.log('[Web Witch] sleep:', d))
+        .catch(() => {});
+    }
+  };
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden' && journalDirtyRef.current) {
+        triggerSleep(true);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Kokoro neural TTS (Phase 3). Model download starts on first user
   // interaction; until it's ready, browser speechSynthesis is the fallback.
@@ -432,11 +479,16 @@ function HomeContent() {
         setStatus("Web Witch: " + reply.substring(0, 40) + "...");
         console.log("[Web Witch] reply meta:", {
           emotion: done.emotion, gesture: done.gesture, lang: done.lang,
-          memorable: done.memorable, tier: done.tier, model: done.model, provider: done.provider,
+          memorable: done.memorable, goal: done.goal, tier: done.tier,
+          model: done.model, provider: done.provider,
         });
         // Body language: face + gesture from the structured reply.
         vrmViewerRef.current?.setEmotion(done.emotion);
         vrmViewerRef.current?.playGesture(done.gesture);
+        // Memory triggers (Phase 7): mark the journal dirty for the tab-hide
+        // beacon; "goodnight" reflex runs consolidation right away.
+        if (done.memorable || done.goal) journalDirtyRef.current = true;
+        if (done.reflexKind === 'goodnight') triggerSleep(false);
 
         replyLang = done.lang ?? replyLang ?? 'en';
         if (streamVoice()) {
