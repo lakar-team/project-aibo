@@ -56,7 +56,7 @@ block is structured this way.
 
 <!-- wiki-chain
 id: project-aibo-claude
-status: Phases 0–6 shipped 2026-07-06 — security baseline; brain v2; model router + budget log (Upstash KV now LIVE, 429s verified); Kokoro TTS + audio lip sync; Whisper STT; body language (GestureEngine, emotions, states, idle free-will — poses need an eyeball pass); consent-gated webcam vision (one-shot 1024px capture, wantsVision reflex, Gemini multimodal chain + in-character blind fallback, consent dialog / watching badge / eyes toggle). Prod env still missing GOOGLE_GEMINI_API_KEY (blocks real sight), OWNER_KEY, GROQ_API_KEY (see PLAN.md STATE). Next: Phase 7 (sleeping memory). Plan in PLAN.md.
-updated: 2026-07-06
+status: Phases 0–7 shipped 2026-07-07 — security baseline; brain v2; model router + budget log; Kokoro TTS + audio lip sync; Whisper STT; body language; consent-gated vision (via OpenRouter VISION_MODEL — sight verified live); and sleeping memory + self-amending goals: per-visitor digest/journal/goals in Upstash, "goal" contract field for conversational behavior changes (verified live incl. full sleep→dream→recall loop), /api/sleep with cron. Prod env still missing GOOGLE_GEMINI_API_KEY, OWNER_KEY (owner mode dormant), GROQ_API_KEY, CRON_SECRET (see PLAN.md STATE). Next: Phase 8 (polish + hand-back). Plan in PLAN.md.
+updated: 2026-07-07
 links: [project-aibo, ai-platforms-claude, vtube-claude]
 -->
